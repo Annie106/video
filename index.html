@@ -635,11 +635,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   let videoTrackTimer = 0;
   let noVideoTrackShown = false;
 
-  /* 移动端单击/双击判定 */
   let lastTapTime = 0;
   let tapTimer = 0;
-
-  /* 暂停图标延迟显示（修复点击播放按钮时图标残留） */
   let pauseIconTimer = 0;
 
   /* =========================================================
@@ -758,8 +755,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     },
     disabled: {
       icon: '🔗',
-      title: '链接无法访问',
-      desc: '链接可能无法访问，不过返回的内容已经不是视频文件了。分享者可能停用了这个链接，或者链接已经过期失效。',
+      title: '链接已被停用',
+      desc: '链接本身可以访问，但返回的内容已经不是视频文件了。分享者可能停用了这个链接，或者链接已经过期失效。',
       steps: [
         '联系分享者，确认链接是否已被停用，有没有新的替代链接。',
         '如果这是你自己上传的链接，登录服务商后台检查链接状态和有效期。',
@@ -769,11 +766,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     captcha: {
       icon: '🛡️',
       title: '需要人机验证',
-      desc: '短时间内多次访问触发了服务商的安全机制，需要在直链页面完成人机验证后，视频才能正常加载。',
+      desc: '短时间内多次访问触发了服务商的安全机制，需要在直链页面完成人机验证后，视频才能正常加载。如果你打开直链看到的不是验证码，而是「链接已停用」「文件不存在」之类的提示页，那说明是链接本身失效了，请参考下面「链接已被停用」。',
       steps: [
-        '点击下方「打开直链完成验证」，在新窗口中完成人机验证。',
+        '点击下方「打开直链完成验证」，在新窗口中完成人机验证（勾选、拼图、滑块等）。',
         '验证成功后回到本页面，点击「已完成验证，重新加载」。',
-        '如果打开直链看到的是「链接已停用」之类的提示页而不是验证码，那说明是链接失效，请参考「链接已被停用」。',
+        '如果打开直链看到的是「链接已停用」「文件不存在」之类的提示页，而不是验证码，那说明是链接失效，请参考「链接已被停用」。',
         '如果验证通过后仍无法播放，等待几分钟后重试；一直不行，说明不是验证问题，看下面其他情况。'
       ]
     },
@@ -834,28 +831,48 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
   /* =========================================================
      ⑧ 直链探测
+     改进：读取一部分 HTML 内容用于关键字判断
      ========================================================= */
   async function probeUrl(url) {
     if (!url || !/^https?:/i.test(url)) return null;
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 3500);
+      const timer = setTimeout(() => ctrl.abort(), 4500);
       const res = await fetch(url, {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store',
         mode: 'cors',
         signal: ctrl.signal,
-        headers: { 'Range': 'bytes=0-511' }
+        headers: { 'Range': 'bytes=0-2047' }
       });
       clearTimeout(timer);
       const ct = (res.headers.get('content-type') || '').toLowerCase();
+      const isHtml = ct.includes('text/html');
+
+      let bodyText = '';
+      if (isHtml) {
+        try {
+          // 最多等 2 秒读取，避免被大文件卡住
+          const readPromise = res.arrayBuffer();
+          const readTimeout = new Promise(resolve => setTimeout(() => resolve(null), 2000));
+          const buf = await Promise.race([readPromise, readTimeout]);
+          if (buf) {
+            const slice = buf.slice(0, 2048);
+            bodyText = new TextDecoder('utf-8', { fatal: false }).decode(slice);
+          }
+        } catch (e) {
+          bodyText = '';
+        }
+      }
+
       return {
         ok: true,
         status: res.status,
         contentType: ct,
-        isHtml: ct.includes('text/html'),
-        isVideo: ct.includes('video/') || ct.includes('application/octet-stream') || ct.includes('application/mp4')
+        isHtml: isHtml,
+        isVideo: ct.includes('video/') || ct.includes('application/octet-stream') || ct.includes('application/mp4'),
+        bodyText: bodyText
       };
     } catch (e) {
       return {
@@ -929,19 +946,44 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     });
   }
 
+  /* =========================================================
+     改进后的判断逻辑：
+     1. HTML 内容优先精细判断（能识别验证页/失效页）
+     2. HTML 但无法识别关键字 → 默认判 captcha（用户打开直链后可自行区分）
+     3. 明确状态码 → 404/403/5xx
+     4. 探测失败时 code 3/4 → 也倾向 captcha
+     ========================================================= */
   function pickPriority(code, wasTimeout, probe, override) {
     if (override) return override;
 
     if (probe && probe.ok) {
-      if (probe.status === 404)      return 'disabled';
-      if (probe.status === 403)      return 'ipblocked';
-      if (probe.status >= 500)       return 'cdn';
-      if (probe.isHtml)              return 'captcha';
-      if (!probe.isVideo && !probe.isHtml) return 'disabled';
+      // ---- 探测到 HTML：读内容做精细判断 ----
+      if (probe.isHtml) {
+        const t = probe.bodyText || '';
+
+        // 明确的失效特征（优先，因为失效提示更明确）
+        const disabledRe = /已停用|已过期|已删除|不存在|分享.{0,4}取消|失效|资源不存在|file\s*not\s*found|link\s*expired|link\s*(has\s*been\s*)?(disabled|deleted|removed|suspended)|not\s*found|access\s*denied\s*-\s*link/i;
+        if (disabledRe.test(t)) return 'disabled';
+
+        // 明确的验证特征
+        const captchaRe = /captcha|challenge|cloudflare|turnstile|recaptcha|hcaptcha|verify|robot|人机|验证码|滑动验证|安全验证|访问.{0,6}频繁|请稍后/i;
+        if (captchaRe.test(t)) return 'captcha';
+
+        // HTML 内容无法识别具体类型 → 默认判 captcha（用户打开直链后能立刻看出来）
+        return 'captcha';
+      }
+
+      // ---- 非 HTML，看状态码 ----
+      if (probe.status === 404) return 'disabled';
+      if (probe.status === 403) return 'ipblocked';
+      if (probe.status >= 500)  return 'cdn';
+      if (!probe.isVideo)       return 'disabled';
     }
+
+    // ---- 探测失败，退回 MediaError ----
     if (code === 1) return 'aborted';
-    if (code === 3) return 'disabled';
-    if (code === 4) return 'disabled';
+    // 关键改动：code 3/4 且探测失败 → 倾向 captcha（用户打开直链后可自行区分）
+    if (code === 3 || code === 4) return 'captcha';
     if (code === 2) return 'timeout';
     if (wasTimeout) return 'timeout';
     return 'timeout';
@@ -964,7 +1006,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       return '视频服务商返回了 ' + (probe && probe.status ? probe.status : '5xx') + ' 错误，服务暂时不可用。';
     }
     if (priority === 'captcha') {
-      return '返回的是一个网页而非视频，可能是人机验证页或链接失效页。';
+      return '返回的是一个网页而不是视频，可能是人机验证页，也可能是链接失效提示页。打开直链看一眼就能确定。';
     }
     if (priority === 'timeout') {
       if (wasTimeout) return '等待 25 秒后仍然没有收到视频数据。';
@@ -986,7 +1028,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     const h = el('h3', 'ov-sec-title', '可能的原因与解决办法');
     ovScenarios.appendChild(h);
 
-    const order = ['nodecode', 'timeout', 'disabled', 'captcha', 'cdn', 'region', 'ipblocked', 'aborted'];
+    // 顺序：优先展示当前分类，其次展示关联场景
+    const order = ['captcha', 'disabled', 'nodecode', 'timeout', 'cdn', 'region', 'ipblocked', 'aborted'];
     order.splice(order.indexOf(priority), 1);
     order.unshift(priority);
 
@@ -1304,7 +1347,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   video.addEventListener('play', () => {
-    // 立刻取消暂停图标的延迟显示
     clearTimeout(pauseIconTimer);
     updatePlayBtn();
     hidePlayIcon();
@@ -1317,8 +1359,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     if (switching) return;
     if (noVideoTrackShown) return;
 
-    // 延迟显示暂停图标：如果这期间 play 事件触发，图标就不会显示
-    // 这样点击播放按钮时不会因为浏览器内部先 pause 再 play 而残留图标
     clearTimeout(pauseIconTimer);
     pauseIconTimer = setTimeout(() => {
       if (video.paused && !switching && !noVideoTrackShown) {
@@ -1431,33 +1471,28 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     timeCurrent.textContent = '00:00';
     timeTotal.textContent = '00:00';
 
-    // 只加载元数据，不播放
     video.src = item.url;
     try { video.playbackRate = currentRate; } catch (e) {}
     video.load();
 
-    // 保险：立即确保暂停状态，避免切换视频时浏览器自动续播
+    // 保险：立即暂停
     try { video.pause(); } catch (e) {}
 
     updatePlayBtn();
 
-    // 元数据加载完后：二次确保暂停 + 显示中央 ▶ 图标提示用户点击
     const onMeta = () => {
       video.removeEventListener('loadedmetadata', onMeta);
-      // 二次保险：切换视频后如果浏览器自动播放了，这里强制暂停
       if (!video.paused) {
         try { video.pause(); } catch (e) {}
       }
       updateProgress();
       updateBuffer();
-      // 延迟一点显示图标，避免刚切换时闪现
       setTimeout(() => {
         if (video.paused && !noVideoTrackShown) showPauseIcon();
       }, 60);
     };
     video.addEventListener('loadedmetadata', onMeta);
 
-    // 元数据如果一直加载不出来，25 秒后报错
     watchdog = setTimeout(() => {
       if (video.readyState < 1) {
         timedOut = true;
