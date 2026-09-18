@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <title>视频播放</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%234f8cff'/><path d='M9 6.5v11l9-5.5z' fill='white'/></svg>">
 <style>
 :root{
   --bg:#0a0a0c; --panel:#141418; --line:#26262e;
@@ -62,13 +63,14 @@ button.primary:hover{
   z-index:18;pointer-events:none;user-select:none;
   width:92px;height:92px;display:grid;place-items:center;
   border-radius:50%;
-  font-size:40px;color:#fff;line-height:1;padding-left:4px;
+  color:#fff;
   background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.06));
   border:1px solid rgba(255,255,255,.22);
   box-shadow:0 8px 32px rgba(0,0,0,.5);
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   opacity:0;transition:opacity .22s,transform .22s;
 }
+#playIcon svg{width:38px;height:38px;display:block;margin-left:4px}
 #playIcon.persist{opacity:.92;transform:translate(-50%,-50%) scale(1)}
 
 #bar{
@@ -79,6 +81,16 @@ button.primary:hover{
   opacity:0;pointer-events:none;transition:opacity .25s;
 }
 #bar.show{opacity:1;pointer-events:auto}
+
+/* 移动端模式：所有窄屏样式都挂在 body.mobile-mode 上 */
+body.mobile-mode #bar{
+  opacity:1 !important;
+  pointer-events:auto !important;
+}
+body.mobile-mode .icon-btn{width:44px;height:44px}
+body.mobile-mode .icon-btn svg{width:20px;height:20px}
+body.mobile-mode .icon-btn.big svg{width:24px;height:24px}
+body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
 #progressRow{display:flex;align-items:center;gap:10px;padding:0 2px}
 #timeCurrent,#timeTotal{
@@ -137,7 +149,7 @@ button.primary:hover{
 
 .icon-btn{
   width:38px;height:38px;flex:none;display:grid;place-items:center;padding:0;
-  font-size:16px;color:#fff;line-height:1;
+  color:#fff;line-height:1;
   border:1px solid rgba(255,255,255,.20);
   border-radius:10px;
   background:linear-gradient(135deg,
@@ -156,7 +168,8 @@ button.primary:hover{
   border-color:rgba(255,255,255,.34);
 }
 .icon-btn:active{transform:scale(.95)}
-.icon-btn.big{font-size:18px}
+.icon-btn svg{width:18px;height:18px;display:block;pointer-events:none}
+.icon-btn.big svg{width:20px;height:20px}
 
 #btnSpeed{
   width:44px;height:38px;flex:none;
@@ -429,7 +442,10 @@ button.primary:hover{
   <video id="player" playsinline preload="metadata"></video>
 
   <div id="watermark">RH 工作室</div>
-  <div id="playIcon">▶</div>
+
+  <div id="playIcon">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l12-7z"/></svg>
+  </div>
 
   <div id="bar">
     <div id="progressRow">
@@ -443,12 +459,32 @@ button.primary:hover{
     </div>
 
     <div id="controlsRow">
-      <button class="icon-btn" id="btnList" title="视频列表">☰</button>
+      <button class="icon-btn" id="btnList" title="视频列表" aria-label="视频列表">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="4" y1="7" x2="20" y2="7"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="17" x2="20" y2="17"/>
+        </svg>
+      </button>
       <div id="nowTitle">未选择视频</div>
 
-      <button class="icon-btn big" id="btnPrev" title="上一个">⏮</button>
-      <button class="icon-btn big" id="btnPlay" title="播放/暂停 (空格)">▶</button>
-      <button class="icon-btn big" id="btnNext" title="下一个">⏭</button>
+      <button class="icon-btn big" id="btnPrev" title="上一个" aria-label="上一个">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 5h2v14H7z"/>
+          <path d="M20 5v14L9 12z"/>
+        </svg>
+      </button>
+
+      <button class="icon-btn big" id="btnPlay" title="播放/暂停 (空格)" aria-label="播放/暂停">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l14-8z"/></svg>
+      </button>
+
+      <button class="icon-btn big" id="btnNext" title="下一个" aria-label="下一个">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M15 5h2v14h-2z"/>
+          <path d="M4 5v14l11-7z"/>
+        </svg>
+      </button>
 
       <div id="speedBox">
         <button id="btnSpeed" title="播放速度">1.0x</button>
@@ -463,14 +499,27 @@ button.primary:hover{
       </div>
 
       <div id="volBox">
-        <button class="icon-btn big" id="btnMute" title="音量">🔊</button>
+        <button class="icon-btn big" id="btnMute" title="音量" aria-label="音量">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4 9v6h4l5 4V5L8 9H4z"/>
+            <path d="M16 7.5a5 5 0 010 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M18.5 4.5a9 9 0 010 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
         <div id="volSlider">
           <input type="range" id="volRange" min="0" max="100" value="100"
                  aria-label="音量" step="1">
         </div>
       </div>
 
-      <button class="icon-btn big" id="btnFull" title="全屏 (F)">⛶</button>
+      <button class="icon-btn big" id="btnFull" title="全屏 (F)" aria-label="全屏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9V4h5"/>
+          <path d="M20 9V4h-5"/>
+          <path d="M4 15v5h5"/>
+          <path d="M20 15v5h-5"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -479,7 +528,12 @@ button.primary:hover{
   <aside id="panel">
     <div class="p-head">
       <span>视频列表</span>
-      <button class="icon-btn" id="btnClose" style="width:30px;height:30px;font-size:13px">✕</button>
+      <button class="icon-btn" id="btnClose" style="width:30px;height:30px" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="6" y1="6" x2="18" y2="18"/>
+          <line x1="18" y1="6" x2="6" y2="18"/>
+        </svg>
+      </button>
     </div>
     <ul id="list"></ul>
   </aside>
@@ -501,17 +555,15 @@ button.primary:hover{
   'use strict';
 
   /* =========================================================
-     ① 在这里填写你的视频直链列表
+     ① 视频直链列表
      ========================================================= */
   const VIDEO_LIST = [
     { name: '视频 1', url: 'https://links.8uid.com/d/e470cbd9a1b062d12257be3674cd06d5' }
-    // 继续添加...
   ];
 
   /* =========================================================
-     ② 播放器逻辑
+     ② 元素引用
      ========================================================= */
-
   const $ = id => document.getElementById(id);
   const video    = $('player'),  stage  = $('stage'),  bar    = $('bar');
   const nowTitle = $('nowTitle'),panel  = $('panel'),  scrim  = $('scrim');
@@ -528,24 +580,108 @@ button.primary:hover{
   const timeCurrent    = $('timeCurrent');
   const timeTotal      = $('timeTotal');
 
-  const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  /* =========================================================
+     ③ 全局状态
+     ========================================================= */
+  const DESKTOP_HIDE_DELAY = 400;
+  const TOUCH_HIDE_DELAY   = 7000;
+  const HOT_ZONE = 170;
 
-  let playlist = VIDEO_LIST.map(item => ({
-    name: item.name || item.url,
-    url: item.url
-  }));
-
-  let index   = -1;
-  let lastUrl = '';
-  let watchdog = 0;
+  let isMobile = false;
+  let barTimer = 0;
+  let dragging = false;
+  let dragRatio = 0;
   let volPanelOpen   = false;
   let speedPanelOpen = false;
   let volWarned = false;
   let switching = false;
   let timedOut  = false;
   let currentRate = 1.0;
+  let index   = -1;
+  let lastUrl = '';
+  let watchdog = 0;
 
-  /* ---------- 工具 ---------- */
+  /* =========================================================
+     ④ 移动端判断：User-Agent + 屏幕宽度
+     - UA 优先：手机 / 平板一定识别
+     - 宽度兜底：桌面缩小窗口也识别
+     ========================================================= */
+  function detectMobile() {
+    const ua = navigator.userAgent || '';
+
+    // 1) UA 里的移动设备关键字（手机 / 平板 / 移动系统）
+    if (/android|iphone|ipod|ipad|blackberry|iemobile|opera mini|mobile|windows phone|webos|kindle|silk/i.test(ua)) {
+      return true;
+    }
+
+    // 2) iPad iOS 13+ 的 UA 伪装成 Mac，用触摸点识别
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
+      return true;
+    }
+
+    // 3) 兜底：窗口宽度（桌面缩窄窗口时切换）
+    if (window.innerWidth <= 768) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function applyMobileMode() {
+    const mobile = detectMobile();
+    document.body.classList.toggle('mobile-mode', mobile);
+
+    if (mobile === isMobile) return;
+    isMobile = mobile;
+
+    if (isMobile) {
+      clearTimeout(barTimer);
+      bar.classList.add('show');
+    } else {
+      showBar();
+      scheduleHide(DESKTOP_HIDE_DELAY);
+    }
+  }
+
+  // 初始执行
+  applyMobileMode();
+
+  // resize 节流监听
+  let resizeRaf = 0;
+  window.addEventListener('resize', () => {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
+      applyMobileMode();
+    });
+  }, { passive: true });
+
+  // 旋转屏幕
+  window.addEventListener('orientationchange', () => {
+    setTimeout(applyMobileMode, 150);
+  }, { passive: true });
+
+  /* =========================================================
+     ⑤ 图标
+     ========================================================= */
+  const SVG = {
+    play:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l14-8z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+    volHigh: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 7.5a5 5 0 010 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.5 4.5a9 9 0 010 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    volLow: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9.5a3 3 0 010 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    mute:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9H4z"/><line x1="17" y1="9" x2="22" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="22" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    fsEnter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg>',
+    fsExit:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4"/><path d="M15 4v5h5"/><path d="M9 20v-5H4"/><path d="M15 20v-5h5"/></svg>'
+  };
+
+  let playlist = VIDEO_LIST.map(item => ({
+    name: item.name || item.url,
+    url: item.url
+  }));
+
+  /* =========================================================
+     ⑥ 工具
+     ========================================================= */
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -578,7 +714,7 @@ button.primary:hover{
   }
 
   /* =========================================================
-     场景定义
+     ⑦ 场景
      ========================================================= */
   const SCENARIOS = {
     disabled: {
@@ -658,9 +794,7 @@ button.primary:hover{
   };
 
   /* =========================================================
-     直链探测：尝试读取返回头
-     - CORS 允许时，能拿到 status 和 Content-Type
-     - CORS 不允许时，会抛错，此时退回用 MediaError code 判断
+     ⑧ 直链探测
      ========================================================= */
   async function probeUrl(url) {
     if (!url || !/^https?:/i.test(url)) return null;
@@ -693,7 +827,7 @@ button.primary:hover{
   }
 
   /* =========================================================
-     错误展示
+     ⑨ 错误展示
      ========================================================= */
   function showVideoError() {
     clearTimeout(watchdog);
@@ -714,7 +848,6 @@ button.primary:hover{
     ovBtns.innerHTML = '';
     ovDetail.hidden = true;
 
-    // 异步探测，拿到结果后再渲染
     Promise.resolve().then(async () => {
       let probe = null;
       if (url && /^https?:/i.test(url)) {
@@ -724,29 +857,19 @@ button.primary:hover{
     });
   }
 
-  /* 判断优先级：
-     1. probe 有数据（CORS 允许）→ 用 status / Content-Type 判
-     2. probe 无数据             → 用 MediaError code 判
-     3. 都没有                   → 访问超时
-  */
   function pickPriority(code, wasTimeout, probe) {
-    // ---- probe 有数据 ----
     if (probe && probe.ok) {
-      if (probe.status === 404)      return 'disabled';   // 内容不存在
-      if (probe.status === 403)      return 'ipblocked';  // 拒绝访问
-      if (probe.status >= 500)       return 'cdn';        // 服务端错误
-      if (probe.isHtml)              return 'captcha';    // 返回网页（验证页 / 停用页）
-      // 其他状态码，按内容类型判断
+      if (probe.status === 404)      return 'disabled';
+      if (probe.status === 403)      return 'ipblocked';
+      if (probe.status >= 500)       return 'cdn';
+      if (probe.isHtml)              return 'captcha';
       if (!probe.isVideo && !probe.isHtml) return 'disabled';
     }
-
-    // ---- probe 无数据，用 MediaError code ----
-    if (code === 1) return 'aborted';                     // ABORTED
-    if (code === 3) return 'disabled';                    // DECODE
-    if (code === 4) return 'disabled';                    // SRC_NOT_SUPPORTED
-    if (code === 2) return 'timeout';                     // NETWORK
+    if (code === 1) return 'aborted';
+    if (code === 3) return 'disabled';
+    if (code === 4) return 'disabled';
+    if (code === 2) return 'timeout';
     if (wasTimeout) return 'timeout';
-
     return 'timeout';
   }
 
@@ -786,7 +909,6 @@ button.primary:hover{
     const h = el('h3', 'ov-sec-title', '可能的原因与解决办法');
     ovScenarios.appendChild(h);
 
-    // 参考场景排最前，其余按固定顺序
     const order = ['timeout', 'disabled', 'captcha', 'cdn', 'region', 'ipblocked', 'aborted'];
     order.splice(order.indexOf(priority), 1);
     order.unshift(priority);
@@ -814,7 +936,6 @@ button.primary:hover{
       ovScenarios.appendChild(details);
     });
 
-    /* --------- 按钮 --------- */
     ovBtns.innerHTML = '';
     if (priority === 'captcha') {
       ovBtns.appendChild(mkBtn('打开直链完成验证', 'primary', () => {
@@ -832,7 +953,6 @@ button.primary:hover{
       }));
     }
 
-    /* --------- 技术详情 --------- */
     const parts = [];
     if (code) {
       const names = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'SRC_NOT_SUPPORTED' };
@@ -875,21 +995,17 @@ button.primary:hover{
   function hideOverlay() { overlay.hidden = true; }
 
   /* =========================================================
-     中央播放/暂停图标
+     ⑩ 中央图标
      ========================================================= */
   function hidePlayIcon() { playIcon.classList.remove('persist'); }
   function showPauseIcon() {
-    playIcon.textContent = '▶';
     void playIcon.offsetWidth;
     playIcon.classList.add('persist');
   }
 
   /* =========================================================
-     进度条
+     ⑪ 进度条
      ========================================================= */
-  let dragging = false;
-  let dragRatio = 0;
-
   function updateProgress() {
     const d = video.duration;
     if (!d || !isFinite(d) || d <= 0) {
@@ -954,7 +1070,7 @@ button.primary:hover{
     dragging = false;
     progressBar.classList.remove('dragging');
     try { progressBar.releasePointerCapture(e.pointerId); } catch (err) {}
-    scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
   }
   progressBar.addEventListener('pointerup', endDrag);
   progressBar.addEventListener('pointercancel', endDrag);
@@ -967,7 +1083,7 @@ button.primary:hover{
   video.addEventListener('seeked', updateProgress);
 
   /* =========================================================
-     播放速度
+     ⑫ 播放速度
      ========================================================= */
   function setRate(rate, silent) {
     rate = Number(rate);
@@ -1009,7 +1125,7 @@ button.primary:hover{
   });
 
   /* =========================================================
-     音量
+     ⑬ 音量
      ========================================================= */
   function paintVolume() {
     const v = video.muted ? 0 : video.volume;
@@ -1017,9 +1133,10 @@ button.primary:hover{
     volRange.value = pct;
     volRange.style.setProperty('--v', pct + '%');
 
-    if (v <= 0.001)      btnMute.textContent = '🔇';
-    else if (v < 0.5)    btnMute.textContent = '🔉';
-    else                 btnMute.textContent = '🔊';
+    if (v <= 0.001)      btnMute.innerHTML = SVG.mute;
+    else if (v < 0.5)    btnMute.innerHTML = SVG.volLow;
+    else                 btnMute.innerHTML = SVG.volHigh;
+
     btnMute.title = v <= 0.001 ? '取消静音' : '静音';
   }
 
@@ -1050,7 +1167,7 @@ button.primary:hover{
   btnMute.addEventListener('click', e => {
     e.stopPropagation();
     setSpeedPanel(false);
-    if (isTouch) {
+    if (isMobile) {
       setVolPanel(!volPanelOpen);
     } else {
       if (video.muted || video.volume <= 0.001) {
@@ -1071,13 +1188,15 @@ button.primary:hover{
   video.addEventListener('volumechange', paintVolume);
 
   /* =========================================================
-     播放 / 暂停
+     ⑭ 播放 / 暂停
      ========================================================= */
   function togglePlay() {
     if (video.paused) video.play().catch(() => {});
     else video.pause();
   }
-  function updatePlayBtn() { btnPlay.textContent = video.paused ? '▶' : '⏸'; }
+  function updatePlayBtn() {
+    btnPlay.innerHTML = video.paused ? SVG.play : SVG.pause;
+  }
 
   video.addEventListener('play', () => { updatePlayBtn(); hidePlayIcon(); });
   video.addEventListener('pause', () => {
@@ -1091,18 +1210,18 @@ button.primary:hover{
     if (e.target === video) {
       togglePlay();
       showBar();
-      scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
     }
   });
 
   btnPlay.addEventListener('click', () => {
     togglePlay();
     showBar();
-    scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
   });
 
   /* =========================================================
-     列表
+     ⑮ 列表
      ========================================================= */
   function renderList() {
     listEl.innerHTML = '';
@@ -1122,7 +1241,7 @@ button.primary:hover{
   }
 
   /* =========================================================
-     播放视频
+     ⑯ 播放
      ========================================================= */
   function play(i) {
     if (i < 0 || i >= playlist.length) return;
@@ -1182,7 +1301,7 @@ button.primary:hover{
   });
 
   /* =========================================================
-     抽屉
+     ⑰ 抽屉
      ========================================================= */
   function setPanel(open) {
     panel.classList.toggle('open', open);
@@ -1195,44 +1314,37 @@ button.primary:hover{
   scrim.addEventListener('click', () => setPanel(false));
 
   /* =========================================================
-     工具栏显示 / 隐藏
+     ⑱ 工具栏
      ========================================================= */
-  let barTimer = 0;
-  const HOT_ZONE = 170;
-  const DESKTOP_HIDE_DELAY = 400;
-  const TOUCH_HIDE_DELAY   = 7000;
-
   function showBar() {
     clearTimeout(barTimer);
     bar.classList.add('show');
   }
   function scheduleHide(delay) {
     clearTimeout(barTimer);
+    if (isMobile) return;
     if (panel.classList.contains('open')) return;
     if (volPanelOpen || speedPanelOpen) return;
     if (dragging) return;
     barTimer = setTimeout(() => bar.classList.remove('show'), delay);
   }
 
-  if (!isTouch) {
-    let lastMove = 0;
-    document.addEventListener('mousemove', e => {
-      const now = Date.now();
-      if (now - lastMove < 60) return;
-      lastMove = now;
-      if (e.clientY >= window.innerHeight - HOT_ZONE) showBar();
-      else scheduleHide(DESKTOP_HIDE_DELAY);
-    }, { passive: true });
-    document.addEventListener('mouseleave', () => scheduleHide(200));
-  } else {
-    document.addEventListener('touchstart', () => {
-      showBar();
-      scheduleHide(TOUCH_HIDE_DELAY);
-    }, { passive: true });
-  }
+  let lastMove = 0;
+  document.addEventListener('mousemove', e => {
+    if (isMobile) return;
+    const now = Date.now();
+    if (now - lastMove < 60) return;
+    lastMove = now;
+    if (e.clientY >= window.innerHeight - HOT_ZONE) showBar();
+    else scheduleHide(DESKTOP_HIDE_DELAY);
+  }, { passive: true });
+  document.addEventListener('mouseleave', () => {
+    if (isMobile) return;
+    scheduleHide(200);
+  });
 
   /* =========================================================
-     全屏
+     ⑲ 全屏
      ========================================================= */
   function getFsEl() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -1255,15 +1367,15 @@ button.primary:hover{
   ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
     document.addEventListener(ev, () => {
       const on = !!getFsEl();
-      btnFull.textContent = on ? '⤡' : '⛶';
+      btnFull.innerHTML = on ? SVG.fsExit : SVG.fsEnter;
       btnFull.title = on ? '退出全屏 (F)' : '全屏 (F)';
       showBar();
-      scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
     })
   );
 
   /* =========================================================
-     上一个 / 下一个 / 列表点击
+     ⑳ 上一个 / 下一个 / 列表点击
      ========================================================= */
   $('btnPrev').addEventListener('click', () => {
     if (index > 0) play(index - 1); else toast('已经是第一个了');
@@ -1275,11 +1387,11 @@ button.primary:hover{
     const item = e.target.closest('.item');
     if (!item) return;
     play(Number(item.dataset.i));
-    if (window.innerWidth < 760) setPanel(false);
+    if (isMobile) setPanel(false);
   });
 
   /* =========================================================
-     快捷键
+     ㉑ 快捷键
      ========================================================= */
   document.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toLowerCase();
@@ -1289,7 +1401,7 @@ button.primary:hover{
       e.preventDefault();
       togglePlay();
       showBar();
-      scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
     } else if (e.key === 'f' || e.key === 'F') {
       e.preventDefault();
       toggleFull();
@@ -1298,14 +1410,14 @@ button.primary:hover{
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.max(0, video.currentTime - 5);
         showBar();
-        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
       }
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.min(video.duration, video.currentTime + 5);
         showBar();
-        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -1327,24 +1439,25 @@ button.primary:hover{
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.max(0, video.currentTime - 10);
         showBar();
-        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
       }
     } else if (e.key === 'l' || e.key === 'L') {
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.min(video.duration, video.currentTime + 10);
         showBar();
-        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
       }
     }
   });
 
   /* =========================================================
-     启动
+     ㉒ 启动
      ========================================================= */
   renderList();
   updatePlayBtn();
   paintVolume();
   setRate(1, true);
+  btnFull.innerHTML = SVG.fsEnter;
 
   if (playlist.length) {
     play(0);
@@ -1352,10 +1465,41 @@ button.primary:hover{
     showEmpty();
   }
 
-  setTimeout(() => {
-    showBar();
-    scheduleHide(isTouch ? TOUCH_HIDE_DELAY : 2600);
-  }, 400);
+  if (isMobile) {
+    bar.classList.add('show');
+  } else {
+    setTimeout(() => {
+      showBar();
+      scheduleHide(2600);
+    }, 400);
+  }
+
+  /* =========================================================
+     ㉓ ?debug 可视化
+     ========================================================= */
+  if (location.search.indexOf('debug') > -1) {
+    const badge = document.createElement('div');
+    badge.style.cssText =
+      'position:fixed;top:8px;right:8px;z-index:9999;' +
+      'background:rgba(0,0,0,.85);color:#7fff9f;' +
+      'font:12px/1.5 ui-monospace,Menlo,monospace;' +
+      'padding:6px 10px;border-radius:8px;' +
+      'pointer-events:none;border:1px solid #2a3a2a;' +
+      'white-space:pre;line-height:1.5;';
+    document.body.appendChild(badge);
+
+    setInterval(function () {
+      const ua = navigator.userAgent || '';
+      const uaMatch = /android|iphone|ipod|ipad|blackberry|iemobile|opera mini|mobile|windows phone|webos|kindle|silk/i.test(ua);
+      const iPadMatch = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+      badge.textContent =
+        'W: ' + window.innerWidth +
+        '\nUA移动: ' + (uaMatch ? '✓' : '✗') +
+        '\niPad: ' + (iPadMatch ? '✓' : '✗') +
+        '\nclass: ' + (document.body.classList.contains('mobile-mode') ? 'mobile-mode ✓' : '无') +
+        '\n判定: ' + (isMobile ? '移动端' : '桌面端');
+    }, 300);
+  }
 })();
 </script>
 </body>
