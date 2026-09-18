@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>视频播放</title>
+<style>
+:root{
+  --bg:#0a0a0c; --panel:#141418; --line:#26262e;
+  --txt:#ececef; --dim:#8b8b96; --acc:#4f8cff; --danger:#ff6b6b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  height:100%;margin:0;background:var(--bg);color:var(--txt);overflow:hidden;
+  font:14px/1.65 system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+button{
+  font:inherit;color:var(--txt);cursor:pointer;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:9px;padding:7px 13px;
+  background:linear-gradient(135deg,#31313d 0%,#1e1e26 60%,#191920 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 2px 8px rgba(0,0,0,.35);
+  transition:.18s;
+}
+button:hover{
+  background:linear-gradient(135deg,#3d3d4c 0%,#27272f 60%,#202028 100%);
+  border-color:rgba(255,255,255,.18);
+}
+button:active{transform:scale(.97)}
+button.primary{
+  background:linear-gradient(135deg,#6aa1ff 0%,#4f8cff 45%,#3568d8 100%);
+  border-color:rgba(255,255,255,.22);
+  color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.28) inset,0 3px 12px rgba(79,140,255,.38);
+}
+button.primary:hover{
+  background:linear-gradient(135deg,#7aadff 0%,#5f97ff 45%,#3f74e6 100%);
+}
+
+#stage{position:fixed;inset:0;background:#000;overflow:hidden}
+#player{width:100%;height:100%;object-fit:contain;background:#000;display:block;outline:none}
+
+#watermark{
+  position:absolute;top:16px;left:18px;z-index:12;
+  pointer-events:none;user-select:none;
+  font-size:15px;font-weight:800;letter-spacing:2.4px;
+  background:linear-gradient(100deg,
+              rgba(255,255,255,.72) 0%,
+              rgba(210,225,255,.55) 35%,
+              rgba(255,255,255,.28) 70%,
+              rgba(255,255,255,.14) 100%);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  text-shadow:0 1px 8px rgba(0,0,0,.55);
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.5));
+}
+
+#playIcon{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%) scale(.72);
+  z-index:18;pointer-events:none;user-select:none;
+  width:92px;height:92px;display:grid;place-items:center;
+  border-radius:50%;
+  font-size:40px;color:#fff;line-height:1;padding-left:4px;
+  background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.06));
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;transition:opacity .22s,transform .22s;
+}
+#playIcon.persist{opacity:.92;transform:translate(-50%,-50%) scale(1)}
+
+#bar{
+  position:absolute;left:0;right:0;bottom:0;z-index:15;
+  display:flex;flex-direction:column;gap:8px;
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.5) 60%,transparent);
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+#bar.show{opacity:1;pointer-events:auto}
+
+#progressRow{display:flex;align-items:center;gap:10px;padding:0 2px}
+#timeCurrent,#timeTotal{
+  font-size:12px;color:#c3c3ce;
+  font-variant-numeric:tabular-nums;
+  text-shadow:0 1px 4px rgba(0,0,0,.9);
+  flex:none;min-width:44px;
+}
+#timeCurrent{text-align:right}
+#timeTotal{text-align:left}
+
+#progressBar{flex:1;height:16px;position:relative;cursor:pointer;touch-action:none}
+#progressBar::before{
+  content:"";position:absolute;left:0;right:0;top:50%;
+  transform:translateY(-50%);
+  height:4px;border-radius:2px;
+  background:rgba(255,255,255,.18);
+  transition:height .15s;
+}
+#progressBuffer{
+  position:absolute;left:0;top:50%;
+  transform:translateY(-50%);
+  height:4px;border-radius:2px;width:0;
+  background:rgba(255,255,255,.3);
+  transition:height .15s;
+}
+#progressPlayed{
+  position:absolute;left:0;top:50%;
+  transform:translateY(-50%);
+  height:4px;border-radius:2px;width:0;
+  background:linear-gradient(90deg,#4f8cff,#6aa1ff);
+  box-shadow:0 0 8px rgba(79,140,255,.5);
+  transition:height .15s;
+}
+#progressThumb{
+  position:absolute;left:0;top:50%;
+  width:13px;height:13px;border-radius:50%;
+  background:linear-gradient(135deg,#ffffff,#c9d8ff);
+  transform:translate(-50%,-50%) scale(.6);
+  box-shadow:0 2px 8px rgba(0,0,0,.6),0 0 0 1px rgba(79,140,255,.6);
+  opacity:0;
+  transition:opacity .15s,transform .15s;
+  pointer-events:none;
+}
+#progressBar:hover::before,
+#progressBar:hover #progressBuffer,
+#progressBar:hover #progressPlayed,
+#progressBar.dragging::before,
+#progressBar.dragging #progressBuffer,
+#progressBar.dragging #progressPlayed{height:6px}
+#progressBar:hover #progressThumb,
+#progressBar.dragging #progressThumb{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#progressBar.dragging #progressThumb{transform:translate(-50%,-50%) scale(1.2)}
+
+#controlsRow{display:flex;align-items:center;gap:8px}
+
+.icon-btn{
+  width:38px;height:38px;flex:none;display:grid;place-items:center;padding:0;
+  font-size:16px;color:#fff;line-height:1;
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:10px;
+  background:linear-gradient(135deg,
+              rgba(255,255,255,.24) 0%,
+              rgba(255,255,255,.10) 45%,
+              rgba(255,255,255,.04) 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.22) inset,0 3px 12px rgba(0,0,0,.4);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  transition:.18s;
+}
+.icon-btn:hover{
+  background:linear-gradient(135deg,
+              rgba(255,255,255,.38) 0%,
+              rgba(255,255,255,.18) 45%,
+              rgba(255,255,255,.08) 100%);
+  border-color:rgba(255,255,255,.34);
+}
+.icon-btn:active{transform:scale(.95)}
+.icon-btn.big{font-size:18px}
+
+#btnSpeed{
+  width:44px;height:38px;flex:none;
+  display:grid;place-items:center;padding:0;
+  font-size:13px;font-weight:700;color:#fff;letter-spacing:.3px;
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:10px;
+  background:linear-gradient(135deg,
+              rgba(255,255,255,.24) 0%,
+              rgba(255,255,255,.10) 45%,
+              rgba(255,255,255,.04) 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.22) inset,0 3px 12px rgba(0,0,0,.4);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  transition:.18s;
+}
+#btnSpeed:hover{
+  background:linear-gradient(135deg,
+              rgba(255,255,255,.38) 0%,
+              rgba(255,255,255,.18) 45%,
+              rgba(255,255,255,.08) 100%);
+  border-color:rgba(255,255,255,.34);
+}
+#btnSpeed.active{
+  background:linear-gradient(135deg,#6aa1ff 0%,#4f8cff 45%,#3568d8 100%);
+  border-color:rgba(255,255,255,.28);
+  box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 3px 12px rgba(79,140,255,.45);
+}
+
+#nowTitle{
+  flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:13.5px;color:#e9e9f0;text-shadow:0 1px 4px rgba(0,0,0,.85);
+  padding:0 4px;
+}
+
+#volBox{position:relative;flex:none}
+#volSlider{
+  position:absolute;bottom:calc(100% + 12px);right:-6px;
+  padding:13px 14px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.15);
+  background:linear-gradient(135deg,rgba(48,48,58,.97),rgba(26,26,32,.97));
+  box-shadow:0 10px 30px rgba(0,0,0,.6);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  opacity:0;pointer-events:none;
+  transform:translateY(6px);
+  transition:opacity .2s,transform .2s;
+}
+#volSlider::before{
+  content:"";position:absolute;left:0;right:0;bottom:-14px;height:14px;
+}
+#volBox:hover #volSlider,
+#volBox.open #volSlider{
+  opacity:1;pointer-events:auto;transform:translateY(0);
+}
+#volRange{
+  -webkit-appearance:none;appearance:none;
+  display:block;width:112px;height:4px;margin:0;
+  border-radius:2px;outline:none;cursor:pointer;
+  background:linear-gradient(90deg,
+              #4f8cff 0%,
+              #6aa1ff var(--v,100%),
+              rgba(255,255,255,.18) var(--v,100%),
+              rgba(255,255,255,.18) 100%);
+}
+#volRange::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;border-radius:50%;border:none;
+  background:linear-gradient(135deg,#ffffff,#c9d8ff);
+  box-shadow:0 2px 8px rgba(0,0,0,.55),0 0 0 1px rgba(79,140,255,.55);
+  cursor:pointer;transition:transform .15s;
+}
+#volRange::-webkit-slider-thumb:hover{transform:scale(1.18)}
+#volRange::-moz-range-track{
+  height:4px;border-radius:2px;background:rgba(255,255,255,.18);
+}
+#volRange::-moz-range-progress{
+  height:4px;border-radius:2px;
+  background:linear-gradient(90deg,#4f8cff,#6aa1ff);
+}
+#volRange::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;border:none;
+  background:linear-gradient(135deg,#ffffff,#c9d8ff);
+  box-shadow:0 2px 8px rgba(0,0,0,.55),0 0 0 1px rgba(79,140,255,.55);
+  cursor:pointer;
+}
+
+#speedBox{position:relative;flex:none}
+#speedMenu{
+  position:absolute;bottom:calc(100% + 12px);left:50%;
+  transform:translateX(-50%) translateY(6px);
+  padding:6px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.15);
+  background:linear-gradient(135deg,rgba(48,48,58,.97),rgba(26,26,32,.97));
+  box-shadow:0 10px 30px rgba(0,0,0,.6);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  opacity:0;pointer-events:none;
+  transition:opacity .2s,transform .2s;
+  display:flex;flex-direction:column;gap:2px;
+  min-width:92px;
+}
+#speedMenu::before{
+  content:"";position:absolute;left:0;right:0;bottom:-14px;height:14px;
+}
+#speedBox.open #speedMenu{
+  opacity:1;pointer-events:auto;
+  transform:translateX(-50%) translateY(0);
+}
+#speedMenu button{
+  width:100%;text-align:center;padding:7px 10px;
+  border:none;border-radius:7px;
+  background:transparent;
+  font-size:13px;color:#cfcfd8;
+  box-shadow:none;
+  letter-spacing:.4px;
+}
+#speedMenu button:hover{
+  background:rgba(255,255,255,.09);color:#fff;
+}
+#speedMenu button.active{
+  background:linear-gradient(135deg,rgba(79,140,255,.45),rgba(79,140,255,.15));
+  color:#fff;font-weight:700;
+}
+
+#scrim{
+  position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+#scrim.show{opacity:1;pointer-events:auto}
+
+#panel{
+  position:absolute;top:0;right:0;bottom:0;z-index:30;
+  width:min(360px,88vw);
+  background:linear-gradient(180deg,#181820 0%,#131319 55%,#101015 100%);
+  border-left:1px solid var(--line);
+  display:flex;flex-direction:column;
+  transform:translateX(101%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+  box-shadow:-12px 0 36px rgba(0,0,0,.5);
+}
+#panel.open{transform:none}
+.p-head{
+  display:flex;align-items:center;gap:10px;flex:none;
+  padding:13px 14px;border-bottom:1px solid var(--line);font-weight:600;
+  background:linear-gradient(90deg,rgba(79,140,255,.12),transparent 70%);
+}
+.p-head span{flex:1}
+#list{list-style:none;margin:0;padding:6px 0;overflow-y:auto;flex:1}
+#list .empty{padding:26px 16px;text-align:center;color:var(--dim);font-size:13px}
+.item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;
+  border-left:3px solid transparent;transition:background .15s;
+}
+.item:hover{background:linear-gradient(90deg,rgba(255,255,255,.07),rgba(255,255,255,.02))}
+.item.active{
+  background:linear-gradient(90deg,rgba(79,140,255,.22),rgba(79,140,255,.04));
+  border-left-color:var(--acc);
+}
+.item .idx{width:18px;flex:none;text-align:center;color:var(--dim);font-size:12px}
+.item.active .idx{color:var(--acc);font-weight:700}
+.item .meta{flex:1;min-width:0}
+.item .nm{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+#overlay{
+  position:absolute;inset:0;z-index:20;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:24px;overflow:auto;
+  background:radial-gradient(circle at 50% 20%,#17171d 0%,#0a0a0c 72%);
+}
+#overlay[hidden]{display:none}
+.ov-card{
+  width:min(640px,100%);
+  margin:auto 0;
+  animation:pop .22s ease;
+}
+@keyframes pop{from{opacity:0;transform:translateY(10px)}}
+.ov-ico{font-size:30px;line-height:1;margin-bottom:10px}
+.ov-card h2{margin:0 0 9px;font-size:18px;font-weight:650}
+.ov-reason{margin:0 0 16px;color:#b9b9c4;font-size:13.5px;line-height:1.65}
+
+.ov-scenarios{
+  border-top:1px solid var(--line);
+  padding-top:14px;
+}
+.ov-sec-title{
+  font-size:12px;font-weight:600;
+  color:var(--dim);letter-spacing:.6px;
+  margin:0 0 10px;
+}
+.ov-scenario{
+  border:1px solid var(--line);
+  border-radius:10px;
+  margin-bottom:8px;
+  overflow:hidden;
+  background:#101015;
+  transition:border-color .15s;
+}
+.ov-scenario:hover{border-color:#35353f}
+.ov-scenario[open]{
+  background:linear-gradient(135deg,#15151c,#101015);
+  border-color:#33333d;
+}
+.ov-scenario summary{
+  display:flex;align-items:center;gap:9px;
+  padding:11px 13px;
+  cursor:pointer;
+  font-size:13.5px;
+  list-style:none;
+  user-select:none;
+  transition:background .15s;
+}
+.ov-scenario summary:hover{background:rgba(255,255,255,.03)}
+.ov-scenario summary::-webkit-details-marker{display:none}
+.ov-scenario summary::after{
+  content:"▸";
+  margin-left:auto;
+  color:var(--dim);
+  font-size:11px;
+  transition:transform .2s;
+}
+.ov-scenario[open] summary::after{transform:rotate(90deg)}
+.sc-icon{font-size:15px;line-height:1}
+.sc-title{flex:1;font-weight:500}
+.sc-badge{
+  font-size:10px;
+  padding:1px 7px;
+  border-radius:20px;
+  background:linear-gradient(135deg,rgba(79,140,255,.35),rgba(79,140,255,.15));
+  color:#a8c4ff;
+  border:1px solid rgba(79,140,255,.4);
+  font-weight:600;
+  letter-spacing:.3px;
+  margin-right:4px;
+}
+.sc-body{
+  padding:2px 14px 14px 36px;
+  color:#b9b9c4;
+  font-size:13px;
+}
+.sc-body p{margin:0 0 10px}
+.sc-body ol{margin:0;padding-left:18px}
+.sc-body ol li{margin-bottom:6px;line-height:1.6}
+.sc-body ol li::marker{color:var(--acc)}
+
+.ov-detail{
+  margin-top:14px;padding:8px 10px;border-radius:8px;
+  background:#0d0d11;border:1px solid var(--line);
+  font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;
+  color:#7d7d88;word-break:break-all;
+}
+.ov-btns{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
+
+#toast{
+  position:fixed;left:50%;bottom:110px;z-index:100;
+  transform:translate(-50%,10px);
+  background:linear-gradient(135deg,rgba(48,48,58,.97),rgba(26,26,32,.97));
+  border:1px solid rgba(255,255,255,.14);
+  color:#fff;font-size:13px;padding:8px 16px;border-radius:20px;
+  opacity:0;pointer-events:none;transition:.22s;
+  box-shadow:0 6px 22px rgba(0,0,0,.5);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <video id="player" playsinline preload="metadata"></video>
+
+  <div id="watermark">RH 工作室</div>
+  <div id="playIcon">▶</div>
+
+  <div id="bar">
+    <div id="progressRow">
+      <span id="timeCurrent">00:00</span>
+      <div id="progressBar">
+        <div id="progressBuffer"></div>
+        <div id="progressPlayed"></div>
+        <div id="progressThumb"></div>
+      </div>
+      <span id="timeTotal">00:00</span>
+    </div>
+
+    <div id="controlsRow">
+      <button class="icon-btn" id="btnList" title="视频列表">☰</button>
+      <div id="nowTitle">未选择视频</div>
+
+      <button class="icon-btn big" id="btnPrev" title="上一个">⏮</button>
+      <button class="icon-btn big" id="btnPlay" title="播放/暂停 (空格)">▶</button>
+      <button class="icon-btn big" id="btnNext" title="下一个">⏭</button>
+
+      <div id="speedBox">
+        <button id="btnSpeed" title="播放速度">1.0x</button>
+        <div id="speedMenu">
+          <button data-rate="0.5">0.5x</button>
+          <button data-rate="0.75">0.75x</button>
+          <button data-rate="1" class="active">1.0x</button>
+          <button data-rate="1.25">1.25x</button>
+          <button data-rate="1.5">1.5x</button>
+          <button data-rate="2">2.0x</button>
+        </div>
+      </div>
+
+      <div id="volBox">
+        <button class="icon-btn big" id="btnMute" title="音量">🔊</button>
+        <div id="volSlider">
+          <input type="range" id="volRange" min="0" max="100" value="100"
+                 aria-label="音量" step="1">
+        </div>
+      </div>
+
+      <button class="icon-btn big" id="btnFull" title="全屏 (F)">⛶</button>
+    </div>
+  </div>
+
+  <div id="scrim"></div>
+
+  <aside id="panel">
+    <div class="p-head">
+      <span>视频列表</span>
+      <button class="icon-btn" id="btnClose" style="width:30px;height:30px;font-size:13px">✕</button>
+    </div>
+    <ul id="list"></ul>
+  </aside>
+
+  <div id="overlay" hidden>
+    <div class="ov-card">
+      <div class="ov-ico" id="ovIcon">⚠️</div>
+      <h2 id="ovTitle">视频加载失败</h2>
+      <p class="ov-reason" id="ovReason"></p>
+      <div class="ov-scenarios" id="ovScenarios"></div>
+      <div class="ov-detail" id="ovDetail" hidden></div>
+      <div class="ov-btns" id="ovBtns"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     ① 在这里填写你的视频直链列表
+     ========================================================= */
+  const VIDEO_LIST = [
+    { name: '视频 1', url: 'https://links.8uid.com/d/e470cbd9a1b062d12257be3674cd06d5' }
+    // 继续添加...
+  ];
+
+  /* =========================================================
+     ② 播放器逻辑
+     ========================================================= */
+
+  const $ = id => document.getElementById(id);
+  const video    = $('player'),  stage  = $('stage'),  bar    = $('bar');
+  const nowTitle = $('nowTitle'),panel  = $('panel'),  scrim  = $('scrim');
+  const listEl   = $('list'),    overlay= $('overlay'),ovIcon = $('ovIcon');
+  const ovTitle  = $('ovTitle'), ovReason=$('ovReason'),ovScenarios = $('ovScenarios');
+  const ovDetail = $('ovDetail'),ovBtns = $('ovBtns');
+  const btnFull  = $('btnFull'), btnPlay = $('btnPlay'), playIcon = $('playIcon');
+  const volBox   = $('volBox'),  volRange= $('volRange'),btnMute = $('btnMute');
+  const speedBox = $('speedBox'),btnSpeed= $('btnSpeed'),speedMenu = $('speedMenu');
+  const progressBar    = $('progressBar');
+  const progressBuffer = $('progressBuffer');
+  const progressPlayed = $('progressPlayed');
+  const progressThumb  = $('progressThumb');
+  const timeCurrent    = $('timeCurrent');
+  const timeTotal      = $('timeTotal');
+
+  const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+
+  let playlist = VIDEO_LIST.map(item => ({
+    name: item.name || item.url,
+    url: item.url
+  }));
+
+  let index   = -1;
+  let lastUrl = '';
+  let watchdog = 0;
+  let volPanelOpen   = false;
+  let speedPanelOpen = false;
+  let volWarned = false;
+  let switching = false;
+  let timedOut  = false;
+  let currentRate = 1.0;
+
+  /* ---------- 工具 ---------- */
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function mkBtn(text, cls, onClick) {
+    const b = el('button', cls, text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  let toastTimer = 0;
+  function toast(msg) {
+    let t = $('toast');
+    if (!t) { t = el('div'); t.id = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1700);
+  }
+  function fmtTime(s) {
+    if (!isFinite(s) || s < 0) s = 0;
+    s = Math.floor(s);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  }
+
+  /* =========================================================
+     场景定义
+     ========================================================= */
+  const SCENARIOS = {
+    disabled: {
+      icon: '🔗',
+      title: '链接无法访问',
+      desc: '链接可能无法访问，不过返回的内容已经不是视频文件了。分享者可能停用了这个链接，或者链接已经过期失效。',
+      steps: [
+        '联系分享者，确认链接是否已被停用，有没有新的替代链接。',
+        '如果这是你自己上传的链接，登录服务商后台检查链接状态和有效期。',
+        '尝试使用其他可用的备用链接。'
+      ]
+    },
+    captcha: {
+      icon: '🛡️',
+      title: '需要人机验证',
+      desc: '短时间内多次访问触发了服务商的安全机制，需要在直链页面完成人机验证后，视频才能正常加载。',
+      steps: [
+        '点击下方「打开直链完成验证」，在新窗口中完成人机验证。',
+        '验证成功后回到本页面，点击「已完成验证，重新加载」。',
+        '如果打开直链看到的是「链接已停用」之类的提示页而不是验证码，那说明是链接失效，请参考「链接已被停用」。',
+        '如果验证通过后仍无法播放，等待几分钟后重试；一直不行，说明不是验证问题，看下面其他情况。'
+      ]
+    },
+    cdn: {
+      icon: '🌐',
+      title: '视频服务商出现问题',
+      desc: '视频服务商当前无法正常提供内容，可能是服务器故障、CDN 节点异常或维护中。这不是你的问题，也不是链接本身的问题，通常是暂时的。',
+      steps: [
+        '等待几分钟到几小时后再试。服务恢复后会自动正常。',
+        '查看视频服务商的官方公告、状态页面或客服渠道，确认是否有故障通知。',
+        '如果长时间无法恢复，联系分享者获取备用链接。'
+      ]
+    },
+    timeout: {
+      icon: '⏱️',
+      title: '链接访问失败 · 访问超时',
+      desc: '浏览器在规定时间内没能连上视频服务商，或者连接中途断开。常见原因是网络不稳定、服务商响应慢、地区网络屏蔽、代理或 VPN 不稳定。',
+      steps: [
+        '确认你的网络是正常的：能打开其他网站、能播放在线视频吗？',
+        '刷新页面或点击「重新加载」再试一次，偶发的网络抖动很常见。',
+        '切换网络：Wi-Fi 与手机流量互换，换个出口再试。',
+        '如果使用了 VPN / 代理，更换节点或暂时关闭后重试。',
+        '如果切换网络后仍然超时，很可能是地区屏蔽或服务商本身异常，对照下面「当前网络无法访问」和「视频服务商出现问题」。'
+      ]
+    },
+    region: {
+      icon: '📍',
+      title: '当前网络无法访问',
+      desc: '该链接在部分地区（如福建、重庆等）可能存在网络屏蔽，或当前网络环境无法正常访问该服务。',
+      steps: [
+        '尝试切换网络：从 Wi-Fi 切换到手机流量，或更换不同运营商的网络。',
+        '使用可靠的 VPN 或代理后重试。',
+        '请其他地区的朋友帮忙测试，确认是否只是地区性屏蔽。',
+        '如果在公司或校园网内，防火墙也可能拦截，可尝试使用个人网络。'
+      ]
+    },
+    ipblocked: {
+      icon: '⛔',
+      title: 'IP 可能被暂时限流',
+      desc: '短时间内大量访问可能导致你的 IP 被服务商暂时限流，触发了安全机制。',
+      steps: [
+        '等待 10–30 分钟后再重试，通常会自动解除。',
+        '切换网络环境（如从 Wi-Fi 切换到手机流量，IP 会变化）。',
+        '避免短时间内反复刷新或重试，否则会延长封控时间。',
+        '如果持续受限，联系服务商客服反馈。'
+      ]
+    },
+    aborted: {
+      icon: '⏸️',
+      title: '播放被中断',
+      desc: '视频加载过程被中断了，通常是切换视频或网络抖动导致的。',
+      steps: [
+        '点击「重新加载」，或者在列表里重新点一次这个视频。',
+        '如果频繁出现，检查网络是否稳定。'
+      ]
+    }
+  };
+
+  /* =========================================================
+     直链探测：尝试读取返回头
+     - CORS 允许时，能拿到 status 和 Content-Type
+     - CORS 不允许时，会抛错，此时退回用 MediaError code 判断
+     ========================================================= */
+  async function probeUrl(url) {
+    if (!url || !/^https?:/i.test(url)) return null;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 3500);
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+        mode: 'cors',
+        signal: ctrl.signal,
+        headers: { 'Range': 'bytes=0-511' }
+      });
+      clearTimeout(timer);
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      return {
+        ok: true,
+        status: res.status,
+        contentType: ct,
+        isHtml: ct.includes('text/html'),
+        isVideo: ct.includes('video/') || ct.includes('application/octet-stream') || ct.includes('application/mp4')
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        error: (e && e.name === 'AbortError') ? 'timeout' : ((e && e.message) || String(e))
+      };
+    }
+  }
+
+  /* =========================================================
+     错误展示
+     ========================================================= */
+  function showVideoError() {
+    clearTimeout(watchdog);
+    hidePlayIcon();
+    if (!(video.currentSrc || video.src)) return;
+
+    const url  = lastUrl || video.currentSrc || video.src || '';
+    const err  = video.error;
+    const code = err ? err.code : 0;
+    const wasTimeout = timedOut;
+    timedOut = false;
+
+    overlay.hidden = false;
+    ovIcon.textContent = '⚠️';
+    ovTitle.textContent = '视频加载失败';
+    ovReason.textContent = '正在诊断问题…';
+    ovScenarios.innerHTML = '';
+    ovBtns.innerHTML = '';
+    ovDetail.hidden = true;
+
+    // 异步探测，拿到结果后再渲染
+    Promise.resolve().then(async () => {
+      let probe = null;
+      if (url && /^https?:/i.test(url)) {
+        probe = await probeUrl(url);
+      }
+      buildErrorUI(code, wasTimeout, url, probe);
+    });
+  }
+
+  /* 判断优先级：
+     1. probe 有数据（CORS 允许）→ 用 status / Content-Type 判
+     2. probe 无数据             → 用 MediaError code 判
+     3. 都没有                   → 访问超时
+  */
+  function pickPriority(code, wasTimeout, probe) {
+    // ---- probe 有数据 ----
+    if (probe && probe.ok) {
+      if (probe.status === 404)      return 'disabled';   // 内容不存在
+      if (probe.status === 403)      return 'ipblocked';  // 拒绝访问
+      if (probe.status >= 500)       return 'cdn';        // 服务端错误
+      if (probe.isHtml)              return 'captcha';    // 返回网页（验证页 / 停用页）
+      // 其他状态码，按内容类型判断
+      if (!probe.isVideo && !probe.isHtml) return 'disabled';
+    }
+
+    // ---- probe 无数据，用 MediaError code ----
+    if (code === 1) return 'aborted';                     // ABORTED
+    if (code === 3) return 'disabled';                    // DECODE
+    if (code === 4) return 'disabled';                    // SRC_NOT_SUPPORTED
+    if (code === 2) return 'timeout';                     // NETWORK
+    if (wasTimeout) return 'timeout';
+
+    return 'timeout';
+  }
+
+  function buildReason(priority, code, wasTimeout, probe) {
+    if (priority === 'disabled') {
+      if (probe && probe.ok && probe.status === 404) return '服务器返回 404，链接对应的内容已经不存在。';
+      if (code === 3) return '浏览器收到了数据，但无法解码这段视频，通常说明内容已不再是有效的视频。';
+      if (code === 4) return '返回的内容不是一个浏览器可以直接播放的视频文件。';
+      return '链接可以访问，但返回的内容不是有效的视频文件。';
+    }
+    if (priority === 'ipblocked') {
+      return '服务器返回 403 拒绝访问，通常是 IP 被限流或触发了安全机制。';
+    }
+    if (priority === 'cdn') {
+      return '视频服务商返回了 ' + (probe && probe.status ? probe.status : '5xx') + ' 错误，服务暂时不可用。';
+    }
+    if (priority === 'captcha') {
+      return '返回的是一个网页而非视频，可能是人机验证页或链接失效页。';
+    }
+    if (priority === 'timeout') {
+      if (wasTimeout) return '等待 25 秒后仍然没有收到视频数据。';
+      return '浏览器没能从服务器获取视频数据，连接超时或被中断。';
+    }
+    if (priority === 'aborted') return '视频加载过程被中断了。';
+    return '视频无法播放。';
+  }
+
+  function buildErrorUI(code, wasTimeout, url, probe) {
+    const priority = pickPriority(code, wasTimeout, probe);
+    const sc = SCENARIOS[priority];
+
+    ovIcon.textContent = sc.icon;
+    ovTitle.textContent = sc.title;
+    ovReason.textContent = buildReason(priority, code, wasTimeout, probe);
+
+    ovScenarios.innerHTML = '';
+    const h = el('h3', 'ov-sec-title', '可能的原因与解决办法');
+    ovScenarios.appendChild(h);
+
+    // 参考场景排最前，其余按固定顺序
+    const order = ['timeout', 'disabled', 'captcha', 'cdn', 'region', 'ipblocked', 'aborted'];
+    order.splice(order.indexOf(priority), 1);
+    order.unshift(priority);
+
+    order.forEach(key => {
+      const s = SCENARIOS[key];
+      const details = el('details', 'ov-scenario');
+      if (key === priority) details.open = true;
+
+      const summary = el('summary');
+      summary.appendChild(el('span', 'sc-icon', s.icon));
+      summary.appendChild(el('span', 'sc-title', s.title));
+      if (key === priority) {
+        summary.appendChild(el('span', 'sc-badge', '参考'));
+      }
+      details.appendChild(summary);
+
+      const body = el('div', 'sc-body');
+      body.appendChild(el('p', null, s.desc));
+
+      const ol = el('ol');
+      s.steps.forEach(step => ol.appendChild(el('li', null, step)));
+      body.appendChild(ol);
+      details.appendChild(body);
+      ovScenarios.appendChild(details);
+    });
+
+    /* --------- 按钮 --------- */
+    ovBtns.innerHTML = '';
+    if (priority === 'captcha') {
+      ovBtns.appendChild(mkBtn('打开直链完成验证', 'primary', () => {
+        if (url) window.open(url, '_blank', 'noopener');
+      }));
+      ovBtns.appendChild(mkBtn('已完成验证，重新加载', '', () => {
+        if (index >= 0) play(index);
+      }));
+    } else {
+      ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
+        if (index >= 0) play(index);
+      }));
+      ovBtns.appendChild(mkBtn('打开直链', '', () => {
+        if (url) window.open(url, '_blank', 'noopener');
+      }));
+    }
+
+    /* --------- 技术详情 --------- */
+    const parts = [];
+    if (code) {
+      const names = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'SRC_NOT_SUPPORTED' };
+      parts.push('MediaError ' + code + (names[code] ? ' (' + names[code] + ')' : ''));
+    }
+    if (probe) {
+      if (probe.ok) {
+        if (probe.status) parts.push('HTTP ' + probe.status);
+        if (probe.contentType) parts.push('Content-Type: ' + probe.contentType);
+      } else if (probe.error) {
+        parts.push('probe: ' + probe.error);
+      }
+    }
+    if (video.networkState != null) {
+      const ns = { 0: 'NETWORK_EMPTY', 1: 'NETWORK_IDLE', 2: 'NETWORK_LOADING', 3: 'NETWORK_NO_SOURCE' };
+      parts.push('network=' + (ns[video.networkState] || video.networkState));
+    }
+    if (wasTimeout) parts.push('超时(25s)');
+
+    if (parts.length) {
+      ovDetail.textContent = parts.join('  ·  ');
+      ovDetail.hidden = false;
+    } else {
+      ovDetail.hidden = true;
+    }
+  }
+
+  function showEmpty() {
+    hidePlayIcon();
+    overlay.hidden = false;
+    ovIcon.textContent = '🎬';
+    ovTitle.textContent = '没有视频';
+    ovReason.textContent = '请在 HTML 源码顶部的 VIDEO_LIST 数组中添加视频直链。';
+    ovScenarios.innerHTML = '';
+    ovDetail.hidden = true;
+    ovBtns.innerHTML = '';
+    ovBtns.appendChild(mkBtn('打开视频列表', 'primary', () => setPanel(true)));
+  }
+
+  function hideOverlay() { overlay.hidden = true; }
+
+  /* =========================================================
+     中央播放/暂停图标
+     ========================================================= */
+  function hidePlayIcon() { playIcon.classList.remove('persist'); }
+  function showPauseIcon() {
+    playIcon.textContent = '▶';
+    void playIcon.offsetWidth;
+    playIcon.classList.add('persist');
+  }
+
+  /* =========================================================
+     进度条
+     ========================================================= */
+  let dragging = false;
+  let dragRatio = 0;
+
+  function updateProgress() {
+    const d = video.duration;
+    if (!d || !isFinite(d) || d <= 0) {
+      progressPlayed.style.width = '0%';
+      progressThumb.style.left = '0%';
+      timeCurrent.textContent = '00:00';
+      timeTotal.textContent = '00:00';
+      return;
+    }
+    const ratio = dragging
+      ? dragRatio
+      : Math.max(0, Math.min(1, video.currentTime / d));
+    const pct = (ratio * 100).toFixed(3) + '%';
+    progressPlayed.style.width = pct;
+    progressThumb.style.left = pct;
+    timeCurrent.textContent = fmtTime(ratio * d);
+    timeTotal.textContent = fmtTime(d);
+  }
+
+  function updateBuffer() {
+    const d = video.duration;
+    if (!d || !isFinite(d) || d <= 0 || !video.buffered.length) {
+      progressBuffer.style.width = '0%';
+      return;
+    }
+    let end = 0;
+    try { end = video.buffered.end(video.buffered.length - 1); } catch (e) { end = 0; }
+    const ratio = Math.max(0, Math.min(1, end / d));
+    progressBuffer.style.width = (ratio * 100).toFixed(3) + '%';
+  }
+
+  function ratioFromEvent(e) {
+    const rect = progressBar.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  }
+
+  function seekTo(ratio) {
+    const d = video.duration;
+    if (!d || !isFinite(d) || d <= 0) return;
+    dragRatio = ratio;
+    try { video.currentTime = ratio * d; } catch (e) {}
+    updateProgress();
+  }
+
+  progressBar.addEventListener('pointerdown', e => {
+    if (!video.duration || !isFinite(video.duration)) return;
+    e.preventDefault();
+    dragging = true;
+    progressBar.classList.add('dragging');
+    try { progressBar.setPointerCapture(e.pointerId); } catch (err) {}
+    showBar();
+    clearTimeout(barTimer);
+    seekTo(ratioFromEvent(e));
+  });
+  progressBar.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    seekTo(ratioFromEvent(e));
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    progressBar.classList.remove('dragging');
+    try { progressBar.releasePointerCapture(e.pointerId); } catch (err) {}
+    scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+  }
+  progressBar.addEventListener('pointerup', endDrag);
+  progressBar.addEventListener('pointercancel', endDrag);
+  progressBar.addEventListener('click', e => e.stopPropagation());
+
+  video.addEventListener('timeupdate', updateProgress);
+  video.addEventListener('progress', updateBuffer);
+  video.addEventListener('loadedmetadata', () => { updateProgress(); updateBuffer(); });
+  video.addEventListener('durationchange', () => { updateProgress(); updateBuffer(); });
+  video.addEventListener('seeked', updateProgress);
+
+  /* =========================================================
+     播放速度
+     ========================================================= */
+  function setRate(rate, silent) {
+    rate = Number(rate);
+    if (!isFinite(rate) || rate <= 0) rate = 1;
+    currentRate = rate;
+    video.playbackRate = rate;
+
+    btnSpeed.textContent = (rate === 1 ? '1.0x' : rate + 'x');
+    btnSpeed.classList.toggle('active', rate !== 1 || speedPanelOpen);
+
+    Array.from(speedMenu.children).forEach(b => {
+      const r = Number(b.dataset.rate);
+      b.classList.toggle('active', Math.abs(r - rate) < 0.001);
+    });
+
+    if (!silent && rate !== 1) toast('播放速度 ' + btnSpeed.textContent);
+  }
+
+  speedMenu.addEventListener('click', e => {
+    const b = e.target.closest('button[data-rate]');
+    if (!b) return;
+    e.stopPropagation();
+    setRate(b.dataset.rate);
+    setSpeedPanel(false);
+  });
+
+  function setSpeedPanel(open) {
+    speedPanelOpen = open;
+    speedBox.classList.toggle('open', open);
+    btnSpeed.classList.toggle('active', open || currentRate !== 1);
+    if (open) { showBar(); clearTimeout(barTimer); }
+    else { scheduleHide(400); }
+  }
+
+  btnSpeed.addEventListener('click', e => {
+    e.stopPropagation();
+    setVolPanel(false);
+    setSpeedPanel(!speedPanelOpen);
+  });
+
+  /* =========================================================
+     音量
+     ========================================================= */
+  function paintVolume() {
+    const v = video.muted ? 0 : video.volume;
+    const pct = Math.round(v * 100);
+    volRange.value = pct;
+    volRange.style.setProperty('--v', pct + '%');
+
+    if (v <= 0.001)      btnMute.textContent = '🔇';
+    else if (v < 0.5)    btnMute.textContent = '🔉';
+    else                 btnMute.textContent = '🔊';
+    btnMute.title = v <= 0.001 ? '取消静音' : '静音';
+  }
+
+  function applyVolume(v, fromUser) {
+    v = Math.max(0, Math.min(1, v));
+    video.muted = v <= 0.001;
+    try { video.volume = v; } catch (e) {}
+    if (fromUser && !volWarned && v > 0.001) {
+      if (Math.abs(video.volume - v) > 0.05) {
+        volWarned = true;
+        toast('当前设备不支持网页调节音量，请用设备音量键');
+      }
+    }
+    paintVolume();
+  }
+
+  function setVolPanel(open) {
+    volPanelOpen = open;
+    volBox.classList.toggle('open', open);
+    if (open) { showBar(); clearTimeout(barTimer); }
+    else { scheduleHide(400); }
+  }
+
+  volRange.addEventListener('input', () => {
+    applyVolume(Number(volRange.value) / 100, true);
+  });
+
+  btnMute.addEventListener('click', e => {
+    e.stopPropagation();
+    setSpeedPanel(false);
+    if (isTouch) {
+      setVolPanel(!volPanelOpen);
+    } else {
+      if (video.muted || video.volume <= 0.001) {
+        applyVolume(video.volume > 0.001 ? video.volume : 0.6, false);
+      } else {
+        video.muted = true;
+        paintVolume();
+      }
+      setVolPanel(true);
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!volBox.contains(e.target)) setVolPanel(false);
+    if (!speedBox.contains(e.target)) setSpeedPanel(false);
+  });
+
+  video.addEventListener('volumechange', paintVolume);
+
+  /* =========================================================
+     播放 / 暂停
+     ========================================================= */
+  function togglePlay() {
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  }
+  function updatePlayBtn() { btnPlay.textContent = video.paused ? '▶' : '⏸'; }
+
+  video.addEventListener('play', () => { updatePlayBtn(); hidePlayIcon(); });
+  video.addEventListener('pause', () => {
+    updatePlayBtn();
+    if (switching) return;
+    showPauseIcon();
+  });
+  video.addEventListener('ended', () => { updatePlayBtn(); showPauseIcon(); });
+
+  stage.addEventListener('click', e => {
+    if (e.target === video) {
+      togglePlay();
+      showBar();
+      scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    }
+  });
+
+  btnPlay.addEventListener('click', () => {
+    togglePlay();
+    showBar();
+    scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+  });
+
+  /* =========================================================
+     列表
+     ========================================================= */
+  function renderList() {
+    listEl.innerHTML = '';
+    if (!playlist.length) {
+      listEl.appendChild(el('li', 'empty', '没有视频，请在 HTML 里的 VIDEO_LIST 中添加直链'));
+      return;
+    }
+    playlist.forEach((item, i) => {
+      const li = el('li', 'item' + (i === index ? ' active' : ''));
+      li.dataset.i = i;
+      li.appendChild(el('span', 'idx', String(i + 1)));
+      const meta = el('div', 'meta');
+      meta.appendChild(el('div', 'nm', item.name));
+      li.appendChild(meta);
+      listEl.appendChild(li);
+    });
+  }
+
+  /* =========================================================
+     播放视频
+     ========================================================= */
+  function play(i) {
+    if (i < 0 || i >= playlist.length) return;
+    index = i;
+    const item = playlist[i];
+    lastUrl = item.url;
+
+    renderList();
+    nowTitle.textContent = item.name;
+    document.title = item.name + ' · 播放器';
+
+    hideOverlay();
+    hidePlayIcon();
+    clearTimeout(watchdog);
+    timedOut = false;
+
+    switching = true;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    switching = false;
+
+    progressPlayed.style.width = '0%';
+    progressBuffer.style.width = '0%';
+    progressThumb.style.left = '0%';
+    timeCurrent.textContent = '00:00';
+    timeTotal.textContent = '00:00';
+
+    video.src = item.url;
+    video.load();
+    try { video.playbackRate = currentRate; } catch (e) {}
+    updatePlayBtn();
+
+    const p = video.play();
+    if (p && p.catch) p.catch(() => {});
+
+    watchdog = setTimeout(() => {
+      if (video.readyState < 2) {
+        timedOut = true;
+        showVideoError();
+      }
+    }, 25000);
+  }
+
+  video.addEventListener('loadeddata', () => clearTimeout(watchdog));
+  video.addEventListener('canplay',    () => clearTimeout(watchdog));
+
+  video.addEventListener('error', () => {
+    clearTimeout(watchdog);
+    hidePlayIcon();
+    if (!(video.currentSrc || video.src)) return;
+    showVideoError();
+  });
+
+  video.addEventListener('ended', () => {
+    if (index + 1 < playlist.length) play(index + 1);
+  });
+
+  /* =========================================================
+     抽屉
+     ========================================================= */
+  function setPanel(open) {
+    panel.classList.toggle('open', open);
+    scrim.classList.toggle('show', open);
+    if (open) { showBar(); hideOverlay(); }
+    else { scheduleHide(400); }
+  }
+  $('btnList').addEventListener('click', () => setPanel(!panel.classList.contains('open')));
+  $('btnClose').addEventListener('click', () => setPanel(false));
+  scrim.addEventListener('click', () => setPanel(false));
+
+  /* =========================================================
+     工具栏显示 / 隐藏
+     ========================================================= */
+  let barTimer = 0;
+  const HOT_ZONE = 170;
+  const DESKTOP_HIDE_DELAY = 400;
+  const TOUCH_HIDE_DELAY   = 7000;
+
+  function showBar() {
+    clearTimeout(barTimer);
+    bar.classList.add('show');
+  }
+  function scheduleHide(delay) {
+    clearTimeout(barTimer);
+    if (panel.classList.contains('open')) return;
+    if (volPanelOpen || speedPanelOpen) return;
+    if (dragging) return;
+    barTimer = setTimeout(() => bar.classList.remove('show'), delay);
+  }
+
+  if (!isTouch) {
+    let lastMove = 0;
+    document.addEventListener('mousemove', e => {
+      const now = Date.now();
+      if (now - lastMove < 60) return;
+      lastMove = now;
+      if (e.clientY >= window.innerHeight - HOT_ZONE) showBar();
+      else scheduleHide(DESKTOP_HIDE_DELAY);
+    }, { passive: true });
+    document.addEventListener('mouseleave', () => scheduleHide(200));
+  } else {
+    document.addEventListener('touchstart', () => {
+      showBar();
+      scheduleHide(TOUCH_HIDE_DELAY);
+    }, { passive: true });
+  }
+
+  /* =========================================================
+     全屏
+     ========================================================= */
+  function getFsEl() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+  async function toggleFull() {
+    try {
+      if (!getFsEl()) {
+        if (stage.requestFullscreen) await stage.requestFullscreen();
+        else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
+        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    } catch (e) {
+      toast('无法进入全屏，请用视频自带的按钮');
+    }
+  }
+  btnFull.addEventListener('click', toggleFull);
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+    document.addEventListener(ev, () => {
+      const on = !!getFsEl();
+      btnFull.textContent = on ? '⤡' : '⛶';
+      btnFull.title = on ? '退出全屏 (F)' : '全屏 (F)';
+      showBar();
+      scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    })
+  );
+
+  /* =========================================================
+     上一个 / 下一个 / 列表点击
+     ========================================================= */
+  $('btnPrev').addEventListener('click', () => {
+    if (index > 0) play(index - 1); else toast('已经是第一个了');
+  });
+  $('btnNext').addEventListener('click', () => {
+    if (index < playlist.length - 1) play(index + 1); else toast('已经是最后一个了');
+  });
+  listEl.addEventListener('click', e => {
+    const item = e.target.closest('.item');
+    if (!item) return;
+    play(Number(item.dataset.i));
+    if (window.innerWidth < 760) setPanel(false);
+  });
+
+  /* =========================================================
+     快捷键
+     ========================================================= */
+  document.addEventListener('keydown', e => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'textarea' || tag === 'input') return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      togglePlay();
+      showBar();
+      scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    } else if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      toggleFull();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (video.duration && isFinite(video.duration)) {
+        video.currentTime = Math.max(0, video.currentTime - 5);
+        showBar();
+        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      }
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (video.duration && isFinite(video.duration)) {
+        video.currentTime = Math.min(video.duration, video.currentTime + 5);
+        showBar();
+        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      applyVolume((video.muted ? 0 : video.volume) + 0.05, true);
+      showBar();
+      setVolPanel(true);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      applyVolume((video.muted ? 0 : video.volume) - 0.05, true);
+      showBar();
+      setVolPanel(true);
+    } else if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      if (video.muted || video.volume <= 0.001) applyVolume(video.volume > 0.001 ? video.volume : 0.6, false);
+      else { video.muted = true; paintVolume(); }
+      showBar();
+      setVolPanel(true);
+    } else if (e.key === 'j' || e.key === 'J') {
+      if (video.duration && isFinite(video.duration)) {
+        video.currentTime = Math.max(0, video.currentTime - 10);
+        showBar();
+        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      }
+    } else if (e.key === 'l' || e.key === 'L') {
+      if (video.duration && isFinite(video.duration)) {
+        video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        showBar();
+        scheduleHide(isTouch ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      }
+    }
+  });
+
+  /* =========================================================
+     启动
+     ========================================================= */
+  renderList();
+  updatePlayBtn();
+  paintVolume();
+  setRate(1, true);
+
+  if (playlist.length) {
+    play(0);
+  } else {
+    showEmpty();
+  }
+
+  setTimeout(() => {
+    showBar();
+    scheduleHide(isTouch ? TOUCH_HIDE_DELAY : 2600);
+  }, 400);
+})();
+</script>
+</body>
+</html>
