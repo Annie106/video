@@ -82,10 +82,12 @@ button.primary:hover{
 }
 #bar.show{opacity:1;pointer-events:auto}
 
-body.mobile-mode #bar{
+/* 移动端非全屏时工具栏常驻 */
+body.mobile-mode:not(.in-fullscreen) #bar{
   opacity:1 !important;
   pointer-events:auto !important;
 }
+
 body.mobile-mode .icon-btn{width:44px;height:44px}
 body.mobile-mode .icon-btn svg{width:20px;height:20px}
 body.mobile-mode .icon-btn.big svg{width:24px;height:24px}
@@ -617,6 +619,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   const TOUCH_HIDE_DELAY   = 7000;
   const HOT_ZONE = 170;
   const VIDEO_TRACK_CHECK_DELAY = 3000;
+  const DOUBLE_TAP_DELAY = 280;
 
   let isMobile = false;
   let barTimer = 0;
@@ -633,6 +636,10 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   let watchdog = 0;
   let videoTrackTimer = 0;
   let noVideoTrackShown = false;
+
+  /* 移动端单击/双击判定 */
+  let lastTapTime = 0;
+  let tapTimer = 0;
 
   /* =========================================================
      ④ 移动端判断
@@ -660,7 +667,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
     if (isMobile) {
       clearTimeout(barTimer);
-      bar.classList.add('show');
+      // 非全屏时工具栏常驻由 CSS 控制
+      if (!getFsEl()) bar.classList.add('show');
     } else {
       showBar();
       scheduleHide(DESKTOP_HIDE_DELAY);
@@ -738,7 +746,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
      ⑦ 场景定义
      ========================================================= */
   const SCENARIOS = {
-    /* -------- 视频轨解码失败：只有声音没画面 -------- */
     nodecode: {
       icon: '🔇',
       title: '视频无法解码 · 只有声音没有画面',
@@ -1011,7 +1018,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       ovScenarios.appendChild(details);
     });
 
-    /* 按钮 */
     ovBtns.innerHTML = '';
 
     if (priority === 'captcha') {
@@ -1019,11 +1025,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         if (url) window.open(url, '_blank', 'noopener');
       }));
       ovBtns.appendChild(mkBtn('已完成验证，重新加载', '', () => {
-        if (index >= 0) play(index);
+        if (index >= 0) loadOnly(index);
       }));
     } else if (priority === 'nodecode') {
       ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
-        if (index >= 0) play(index);
+        if (index >= 0) loadOnly(index);
       }));
       ovBtns.appendChild(mkBtn('打开直链试试', '', () => {
         if (url) window.open(url, '_blank', 'noopener');
@@ -1031,22 +1037,21 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       if (playlist.length > 1) {
         ovBtns.appendChild(mkBtn('换一个视频', '', () => {
           if (index + 1 < playlist.length) {
-            play(index + 1);
+            loadOnly(index + 1);
           } else {
-            play(0);
+            loadOnly(0);
           }
         }));
       }
     } else {
       ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
-        if (index >= 0) play(index);
+        if (index >= 0) loadOnly(index);
       }));
       ovBtns.appendChild(mkBtn('打开直链', '', () => {
         if (url) window.open(url, '_blank', 'noopener');
       }));
     }
 
-    /* 技术详情 */
     const parts = [];
     if (code) {
       const names = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'SRC_NOT_SUPPORTED' };
@@ -1319,11 +1324,41 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     if (!video.paused) scheduleVideoTrackCheck();
   });
 
+  /* =========================================================
+     ⑯ 舞台点击处理
+     - 桌面端：单击暂停/播放
+     - 移动端：双击暂停/播放；单击在"播放中"时切换工具栏，"暂停中"时播放
+     ========================================================= */
   stage.addEventListener('click', e => {
-    if (e.target === video) {
+    if (e.target !== video) return;
+
+    if (isMobile) {
+      const now = Date.now();
+      const isDoubleTap = (now - lastTapTime) < DOUBLE_TAP_DELAY;
+
+      if (isDoubleTap) {
+        clearTimeout(tapTimer);
+        lastTapTime = 0;
+        togglePlay();
+      } else {
+        lastTapTime = now;
+        clearTimeout(tapTimer);
+        tapTimer = setTimeout(() => {
+          tapTimer = 0;
+          lastTapTime = 0;
+
+          if (video.paused) {
+            togglePlay();
+          } else {
+            bar.classList.toggle('show');
+          }
+        }, DOUBLE_TAP_DELAY);
+      }
+    } else {
+      // 桌面端：保持原样
       togglePlay();
       showBar();
-      scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      scheduleHide(DESKTOP_HIDE_DELAY);
     }
   });
 
@@ -1334,7 +1369,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑯ 列表
+     ⑰ 列表
      ========================================================= */
   function renderList() {
     listEl.innerHTML = '';
@@ -1354,9 +1389,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑰ 播放
+     ⑱ 加载视频（不自动播放）
      ========================================================= */
-  function play(i) {
+  function loadOnly(i) {
     if (i < 0 || i >= playlist.length) return;
     index = i;
     const item = playlist[i];
@@ -1385,22 +1420,38 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     timeCurrent.textContent = '00:00';
     timeTotal.textContent = '00:00';
 
+    // 只加载元数据，不播放
     video.src = item.url;
-    video.load();
     try { video.playbackRate = currentRate; } catch (e) {}
+    video.load();
     updatePlayBtn();
 
-    const p = video.play();
-    if (p && p.catch) p.catch(() => {});
+    // 元数据加载完后显示中央 ▶ 图标提示用户点击
+    const onMeta = () => {
+      video.removeEventListener('loadedmetadata', onMeta);
+      updateProgress();
+      updateBuffer();
+      showPauseIcon();
+    };
+    video.addEventListener('loadedmetadata', onMeta);
 
+    // 元数据如果一直加载不出来，25 秒后报错
     watchdog = setTimeout(() => {
-      if (video.readyState < 2) {
+      if (video.readyState < 1) {
         timedOut = true;
         showVideoError();
       }
     }, 25000);
   }
 
+  /* =========================================================
+     ⑲ 事件：加载相关
+     ========================================================= */
+  video.addEventListener('loadedmetadata', () => {
+    clearTimeout(watchdog);
+    updateProgress();
+    updateBuffer();
+  });
   video.addEventListener('loadeddata', () => clearTimeout(watchdog));
   video.addEventListener('canplay',    () => clearTimeout(watchdog));
 
@@ -1413,11 +1464,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   video.addEventListener('ended', () => {
-    if (index + 1 < playlist.length) play(index + 1);
+    if (index + 1 < playlist.length) loadOnly(index + 1);
   });
 
   /* =========================================================
-     ⑱ 抽屉
+     ⑳ 抽屉
      ========================================================= */
   function setPanel(open) {
     panel.classList.toggle('open', open);
@@ -1430,7 +1481,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   scrim.addEventListener('click', () => setPanel(false));
 
   /* =========================================================
-     ⑲ 工具栏
+     ㉑ 工具栏
      ========================================================= */
   function showBar() {
     clearTimeout(barTimer);
@@ -1438,7 +1489,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
   function scheduleHide(delay) {
     clearTimeout(barTimer);
-    if (isMobile) return;
+    if (isMobile) return;   // 移动端不自动隐藏
     if (panel.classList.contains('open')) return;
     if (volPanelOpen || speedPanelOpen) return;
     if (dragging) return;
@@ -1460,7 +1511,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑳ 全屏
+     ㉒ 全屏
      ========================================================= */
   function getFsEl() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -1480,34 +1531,50 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     }
   }
   btnFull.addEventListener('click', toggleFull);
+
   ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
     document.addEventListener(ev, () => {
       const on = !!getFsEl();
       btnFull.innerHTML = on ? SVG.fsExit : SVG.fsEnter;
       btnFull.title = on ? '退出全屏 (F)' : '全屏 (F)';
-      showBar();
-      scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+
+      // 让 CSS 知道当前是否全屏
+      document.body.classList.toggle('in-fullscreen', on);
+
+      if (isMobile) {
+        if (on) {
+          // 移动端进入全屏：默认隐藏工具栏
+          bar.classList.remove('show');
+        } else {
+          // 移动端退出全屏：工具栏常驻
+          bar.classList.add('show');
+        }
+      } else {
+        // 桌面端：保持原样
+        showBar();
+        scheduleHide(DESKTOP_HIDE_DELAY);
+      }
     })
   );
 
   /* =========================================================
-     ㉑ 上一个 / 下一个 / 列表点击
+     ㉓ 上一个 / 下一个 / 列表点击
      ========================================================= */
   $('btnPrev').addEventListener('click', () => {
-    if (index > 0) play(index - 1); else toast('已经是第一个了');
+    if (index > 0) loadOnly(index - 1); else toast('已经是第一个了');
   });
   $('btnNext').addEventListener('click', () => {
-    if (index < playlist.length - 1) play(index + 1); else toast('已经是最后一个了');
+    if (index < playlist.length - 1) loadOnly(index + 1); else toast('已经是最后一个了');
   });
   listEl.addEventListener('click', e => {
     const item = e.target.closest('.item');
     if (!item) return;
-    play(Number(item.dataset.i));
+    loadOnly(Number(item.dataset.i));
     if (isMobile) setPanel(false);
   });
 
   /* =========================================================
-     ㉒ 快捷键
+     ㉔ 快捷键
      ========================================================= */
   document.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toLowerCase();
@@ -1567,7 +1634,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉓ 启动
+     ㉕ 启动
      ========================================================= */
   renderList();
   updatePlayBtn();
@@ -1576,14 +1643,17 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   btnFull.innerHTML = SVG.fsEnter;
 
   if (playlist.length) {
-    play(0);
+    // 所有端都不自动播放，只加载元数据
+    loadOnly(0);
   } else {
     showEmpty();
   }
 
+  // 移动端非全屏时工具栏常驻
   if (isMobile) {
     bar.classList.add('show');
   } else {
+    // 桌面端首次显示后自动隐藏
     setTimeout(() => {
       showBar();
       scheduleHide(2600);
@@ -1591,7 +1661,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ㉔ ?debug 可视化
+     ㉖ ?debug 可视化
      ========================================================= */
   if (location.search.indexOf('debug') > -1) {
     const badge = document.createElement('div');
@@ -1607,11 +1677,10 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     setInterval(function () {
       badge.textContent =
         'W: ' + window.innerWidth +
-        '\nvideoWidth: ' + video.videoWidth +
-        '\nvideoHeight: ' + video.videoHeight +
-        '\nreadyState: ' + video.readyState +
-        '\ncurrentTime: ' + video.currentTime.toFixed(2) +
-        '\nnoVideoShown: ' + (noVideoTrackShown ? '✓' : '✗');
+        '\nmobile: ' + (isMobile ? '✓' : '✗') +
+        '\nfullscreen: ' + (getFsEl() ? '✓' : '✗') +
+        '\nbar.show: ' + (bar.classList.contains('show') ? '✓' : '✗') +
+        '\npaused: ' + (video.paused ? '✓' : '✗');
     }, 300);
   }
 })();
