@@ -82,7 +82,6 @@ button.primary:hover{
 }
 #bar.show{opacity:1;pointer-events:auto}
 
-/* 移动端非全屏时工具栏常驻 */
 body.mobile-mode:not(.in-fullscreen) #bar{
   opacity:1 !important;
   pointer-events:auto !important;
@@ -590,7 +589,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     { name: '花木兰', url: 'https://links.8uid.com/d/0d08ac07803fbaaaa70cb8835d239244' },
     { name: '流浪地球2 1080p', url: 'https://links.8uid.com/d/cbf919ba5237ebce6509143cd3e6968a' },
     { name: '视频 2', url: 'https://links.8uid.com/d/e470cbd9a1b062d12257be3674cd06d5' }
-    // 继续添加...
   ];
 
   /* =========================================================
@@ -641,6 +639,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   let lastTapTime = 0;
   let tapTimer = 0;
 
+  /* 暂停图标延迟显示（修复点击播放按钮时图标残留） */
+  let pauseIconTimer = 0;
+
   /* =========================================================
      ④ 移动端判断
      ========================================================= */
@@ -667,7 +668,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
     if (isMobile) {
       clearTimeout(barTimer);
-      // 非全屏时工具栏常驻由 CSS 控制
       if (!getFsEl()) bar.classList.add('show');
     } else {
       showBar();
@@ -1099,7 +1099,10 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   /* =========================================================
      ⑪ 中央图标
      ========================================================= */
-  function hidePlayIcon() { playIcon.classList.remove('persist'); }
+  function hidePlayIcon() {
+    clearTimeout(pauseIconTimer);
+    playIcon.classList.remove('persist');
+  }
   function showPauseIcon() {
     void playIcon.offsetWidth;
     playIcon.classList.add('persist');
@@ -1301,6 +1304,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   video.addEventListener('play', () => {
+    // 立刻取消暂停图标的延迟显示
+    clearTimeout(pauseIconTimer);
     updatePlayBtn();
     hidePlayIcon();
     scheduleVideoTrackCheck();
@@ -1311,7 +1316,15 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     clearVideoTrackCheck();
     if (switching) return;
     if (noVideoTrackShown) return;
-    showPauseIcon();
+
+    // 延迟显示暂停图标：如果这期间 play 事件触发，图标就不会显示
+    // 这样点击播放按钮时不会因为浏览器内部先 pause 再 play 而残留图标
+    clearTimeout(pauseIconTimer);
+    pauseIconTimer = setTimeout(() => {
+      if (video.paused && !switching && !noVideoTrackShown) {
+        showPauseIcon();
+      }
+    }, 180);
   });
 
   video.addEventListener('ended', () => {
@@ -1326,8 +1339,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
   /* =========================================================
      ⑯ 舞台点击处理
-     - 桌面端：单击暂停/播放
-     - 移动端：双击暂停/播放；单击在"播放中"时切换工具栏，"暂停中"时播放
      ========================================================= */
   stage.addEventListener('click', e => {
     if (e.target !== video) return;
@@ -1355,7 +1366,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         }, DOUBLE_TAP_DELAY);
       }
     } else {
-      // 桌面端：保持原样
       togglePlay();
       showBar();
       scheduleHide(DESKTOP_HIDE_DELAY);
@@ -1404,6 +1414,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     hideOverlay();
     hidePlayIcon();
     clearTimeout(watchdog);
+    clearTimeout(pauseIconTimer);
     clearVideoTrackCheck();
     timedOut = false;
     noVideoTrackShown = false;
@@ -1424,14 +1435,25 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     video.src = item.url;
     try { video.playbackRate = currentRate; } catch (e) {}
     video.load();
+
+    // 保险：立即确保暂停状态，避免切换视频时浏览器自动续播
+    try { video.pause(); } catch (e) {}
+
     updatePlayBtn();
 
-    // 元数据加载完后显示中央 ▶ 图标提示用户点击
+    // 元数据加载完后：二次确保暂停 + 显示中央 ▶ 图标提示用户点击
     const onMeta = () => {
       video.removeEventListener('loadedmetadata', onMeta);
+      // 二次保险：切换视频后如果浏览器自动播放了，这里强制暂停
+      if (!video.paused) {
+        try { video.pause(); } catch (e) {}
+      }
       updateProgress();
       updateBuffer();
-      showPauseIcon();
+      // 延迟一点显示图标，避免刚切换时闪现
+      setTimeout(() => {
+        if (video.paused && !noVideoTrackShown) showPauseIcon();
+      }, 60);
     };
     video.addEventListener('loadedmetadata', onMeta);
 
@@ -1489,7 +1511,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
   function scheduleHide(delay) {
     clearTimeout(barTimer);
-    if (isMobile) return;   // 移动端不自动隐藏
+    if (isMobile) return;
     if (panel.classList.contains('open')) return;
     if (volPanelOpen || speedPanelOpen) return;
     if (dragging) return;
@@ -1538,19 +1560,15 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       btnFull.innerHTML = on ? SVG.fsExit : SVG.fsEnter;
       btnFull.title = on ? '退出全屏 (F)' : '全屏 (F)';
 
-      // 让 CSS 知道当前是否全屏
       document.body.classList.toggle('in-fullscreen', on);
 
       if (isMobile) {
         if (on) {
-          // 移动端进入全屏：默认隐藏工具栏
           bar.classList.remove('show');
         } else {
-          // 移动端退出全屏：工具栏常驻
           bar.classList.add('show');
         }
       } else {
-        // 桌面端：保持原样
         showBar();
         scheduleHide(DESKTOP_HIDE_DELAY);
       }
@@ -1643,17 +1661,14 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   btnFull.innerHTML = SVG.fsEnter;
 
   if (playlist.length) {
-    // 所有端都不自动播放，只加载元数据
     loadOnly(0);
   } else {
     showEmpty();
   }
 
-  // 移动端非全屏时工具栏常驻
   if (isMobile) {
     bar.classList.add('show');
   } else {
-    // 桌面端首次显示后自动隐藏
     setTimeout(() => {
       showBar();
       scheduleHide(2600);
@@ -1680,7 +1695,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         '\nmobile: ' + (isMobile ? '✓' : '✗') +
         '\nfullscreen: ' + (getFsEl() ? '✓' : '✗') +
         '\nbar.show: ' + (bar.classList.contains('show') ? '✓' : '✗') +
-        '\npaused: ' + (video.paused ? '✓' : '✗');
+        '\npaused: ' + (video.paused ? '✓' : '✗') +
+        '\nicon: ' + (playIcon.classList.contains('persist') ? '显示' : '隐藏');
     }, 300);
   }
 })();
