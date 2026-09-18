@@ -82,7 +82,6 @@ button.primary:hover{
 }
 #bar.show{opacity:1;pointer-events:auto}
 
-/* 移动端模式：所有窄屏样式都挂在 body.mobile-mode 上 */
 body.mobile-mode #bar{
   opacity:1 !important;
   pointer-events:auto !important;
@@ -405,6 +404,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   letter-spacing:.3px;
   margin-right:4px;
 }
+.sc-badge.warn{
+  background:linear-gradient(135deg,rgba(255,107,107,.35),rgba(255,107,107,.15));
+  color:#ffc0c0;
+  border-color:rgba(255,107,107,.4);
+}
 .sc-body{
   padding:2px 14px 14px 36px;
   color:#b9b9c4;
@@ -412,14 +416,37 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 }
 .sc-body p{margin:0 0 10px}
 .sc-body ol{margin:0;padding-left:18px}
-.sc-body ol li{margin-bottom:6px;line-height:1.6}
+.sc-body ol li{margin-bottom:8px;line-height:1.65}
 .sc-body ol li::marker{color:var(--acc)}
+.sc-body code{
+  font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;
+  background:rgba(0,0,0,.4);
+  padding:1px 5px;
+  border-radius:4px;
+  color:#e0e0ea;
+  word-break:break-all;
+}
+.sc-quote{
+  display:block;
+  margin:6px 0 4px;
+  padding:9px 12px;
+  border-left:3px solid var(--acc);
+  background:rgba(79,140,255,.08);
+  border-radius:0 8px 8px 0;
+  color:#dbe5ff;
+  font-size:13px;
+  line-height:1.6;
+  user-select:text;
+  -webkit-user-select:text;
+}
 
 .ov-detail{
   margin-top:14px;padding:8px 10px;border-radius:8px;
   background:#0d0d11;border:1px solid var(--line);
   font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;
-  color:#7d7d88;word-break:break-all;
+  color:#7d7d88;
+  word-break:break-all;
+  white-space:pre-wrap;
 }
 .ov-btns{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
 
@@ -560,6 +587,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   const VIDEO_LIST = [
     { name: '流浪地球2 1080p', url: 'https://links.8uid.com/d/cbf919ba5237ebce6509143cd3e6968a' },
     { name: '视频 2', url: 'https://links.8uid.com/d/e470cbd9a1b062d12257be3674cd06d5' }
+    // 继续添加...
   ];
 
   /* =========================================================
@@ -587,6 +615,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   const DESKTOP_HIDE_DELAY = 400;
   const TOUCH_HIDE_DELAY   = 7000;
   const HOT_ZONE = 170;
+  const VIDEO_TRACK_CHECK_DELAY = 3000;
 
   let isMobile = false;
   let barTimer = 0;
@@ -601,30 +630,23 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   let index   = -1;
   let lastUrl = '';
   let watchdog = 0;
+  let videoTrackTimer = 0;
+  let noVideoTrackShown = false;
 
   /* =========================================================
-     ④ 移动端判断：User-Agent + 屏幕宽度
-     - UA 优先：手机 / 平板一定识别
-     - 宽度兜底：桌面缩小窗口也识别
+     ④ 移动端判断
      ========================================================= */
   function detectMobile() {
     const ua = navigator.userAgent || '';
-
-    // 1) UA 里的移动设备关键字（手机 / 平板 / 移动系统）
     if (/android|iphone|ipod|ipad|blackberry|iemobile|opera mini|mobile|windows phone|webos|kindle|silk/i.test(ua)) {
       return true;
     }
-
-    // 2) iPad iOS 13+ 的 UA 伪装成 Mac，用触摸点识别
     if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
       return true;
     }
-
-    // 3) 兜底：窗口宽度（桌面缩窄窗口时切换）
     if (window.innerWidth <= 768) {
       return true;
     }
-
     return false;
   }
 
@@ -644,10 +666,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     }
   }
 
-  // 初始执行
   applyMobileMode();
 
-  // resize 节流监听
   let resizeRaf = 0;
   window.addEventListener('resize', () => {
     if (resizeRaf) return;
@@ -657,7 +677,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     });
   }, { passive: true });
 
-  // 旋转屏幕
   window.addEventListener('orientationchange', () => {
     setTimeout(applyMobileMode, 150);
   }, { passive: true });
@@ -715,9 +734,20 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑦ 场景
+     ⑦ 场景定义
      ========================================================= */
   const SCENARIOS = {
+    /* -------- 视频轨解码失败：只有声音没画面 -------- */
+    nodecode: {
+      icon: '🔇',
+      title: '视频无法解码 · 只有声音没有画面',
+      desc: '视频的声音部分可以正常播放，但画面部分你的浏览器无法显示。这通常是因为这个视频使用了比较特殊的压缩格式，你当前用的浏览器不支持。这不是你的网络问题，也不是链接失效，这个视频在有些设备上是能正常播放的。',
+      steps: [
+        '你可以尝试换一个浏览器再打开，比如 Chrome、Edge、Firefox、Safari 等主流浏览器，或者换一台设备再试。',
+        '如果换了浏览器还是只有声音没画面，说明这个视频的格式确实比较特殊。可以把下面这句话复制下来发给分享者：',
+        '<span class="sc-quote">你好，这个视频在我这边只能听到声音，看不到画面，能麻烦换成 MP4（H.264）格式重新上传一下吗？</span>',
+      ]
+    },
     disabled: {
       icon: '🔗',
       title: '链接无法访问',
@@ -828,10 +858,38 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑨ 错误展示
+     ⑨ 视频轨检测
      ========================================================= */
-  function showVideoError() {
+  function clearVideoTrackCheck() {
+    clearTimeout(videoTrackTimer);
+    videoTrackTimer = 0;
+  }
+
+  function scheduleVideoTrackCheck() {
+    clearVideoTrackCheck();
+    if (noVideoTrackShown) return;
+
+    videoTrackTimer = setTimeout(() => {
+      videoTrackTimer = 0;
+      const playing = !video.paused && !video.ended;
+      const playedSome = video.currentTime > 0.5;
+      const hasData = video.readyState >= 2;
+      const noVideo = video.videoWidth === 0 || video.videoHeight === 0;
+
+      if (playing && playedSome && hasData && noVideo) {
+        noVideoTrackShown = true;
+        video.pause();
+        showVideoError('nodecode');
+      }
+    }, VIDEO_TRACK_CHECK_DELAY);
+  }
+
+  /* =========================================================
+     ⑩ 错误展示
+     ========================================================= */
+  function showVideoError(priorityOverride) {
     clearTimeout(watchdog);
+    clearVideoTrackCheck();
     hidePlayIcon();
     if (!(video.currentSrc || video.src)) return;
 
@@ -849,16 +907,23 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     ovBtns.innerHTML = '';
     ovDetail.hidden = true;
 
+    if (priorityOverride === 'nodecode') {
+      buildErrorUI(code, wasTimeout, url, null, 'nodecode');
+      return;
+    }
+
     Promise.resolve().then(async () => {
       let probe = null;
       if (url && /^https?:/i.test(url)) {
         probe = await probeUrl(url);
       }
-      buildErrorUI(code, wasTimeout, url, probe);
+      buildErrorUI(code, wasTimeout, url, probe, priorityOverride);
     });
   }
 
-  function pickPriority(code, wasTimeout, probe) {
+  function pickPriority(code, wasTimeout, probe, override) {
+    if (override) return override;
+
     if (probe && probe.ok) {
       if (probe.status === 404)      return 'disabled';
       if (probe.status === 403)      return 'ipblocked';
@@ -875,6 +940,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   function buildReason(priority, code, wasTimeout, probe) {
+    if (priority === 'nodecode') {
+      return '这个视频的声音可以播放，但画面无法显示。你当前用的浏览器不支持这个视频使用的画面格式。';
+    }
     if (priority === 'disabled') {
       if (probe && probe.ok && probe.status === 404) return '服务器返回 404，链接对应的内容已经不存在。';
       if (code === 3) return '浏览器收到了数据，但无法解码这段视频，通常说明内容已不再是有效的视频。';
@@ -898,8 +966,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     return '视频无法播放。';
   }
 
-  function buildErrorUI(code, wasTimeout, url, probe) {
-    const priority = pickPriority(code, wasTimeout, probe);
+  function buildErrorUI(code, wasTimeout, url, probe, override) {
+    const priority = pickPriority(code, wasTimeout, probe, override);
     const sc = SCENARIOS[priority];
 
     ovIcon.textContent = sc.icon;
@@ -910,7 +978,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     const h = el('h3', 'ov-sec-title', '可能的原因与解决办法');
     ovScenarios.appendChild(h);
 
-    const order = ['timeout', 'disabled', 'captcha', 'cdn', 'region', 'ipblocked', 'aborted'];
+    const order = ['nodecode', 'timeout', 'disabled', 'captcha', 'cdn', 'region', 'ipblocked', 'aborted'];
     order.splice(order.indexOf(priority), 1);
     order.unshift(priority);
 
@@ -923,7 +991,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       summary.appendChild(el('span', 'sc-icon', s.icon));
       summary.appendChild(el('span', 'sc-title', s.title));
       if (key === priority) {
-        summary.appendChild(el('span', 'sc-badge', '参考'));
+        const badge = el('span', 'sc-badge' + (priority === 'nodecode' ? ' warn' : ''), '参考');
+        summary.appendChild(badge);
       }
       details.appendChild(summary);
 
@@ -931,13 +1000,19 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       body.appendChild(el('p', null, s.desc));
 
       const ol = el('ol');
-      s.steps.forEach(step => ol.appendChild(el('li', null, step)));
+      s.steps.forEach(step => {
+        const li = el('li');
+        li.innerHTML = step;
+        ol.appendChild(li);
+      });
       body.appendChild(ol);
       details.appendChild(body);
       ovScenarios.appendChild(details);
     });
 
+    /* 按钮 */
     ovBtns.innerHTML = '';
+
     if (priority === 'captcha') {
       ovBtns.appendChild(mkBtn('打开直链完成验证', 'primary', () => {
         if (url) window.open(url, '_blank', 'noopener');
@@ -945,6 +1020,22 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       ovBtns.appendChild(mkBtn('已完成验证，重新加载', '', () => {
         if (index >= 0) play(index);
       }));
+    } else if (priority === 'nodecode') {
+      ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
+        if (index >= 0) play(index);
+      }));
+      ovBtns.appendChild(mkBtn('打开直链试试', '', () => {
+        if (url) window.open(url, '_blank', 'noopener');
+      }));
+      if (playlist.length > 1) {
+        ovBtns.appendChild(mkBtn('换一个视频', '', () => {
+          if (index + 1 < playlist.length) {
+            play(index + 1);
+          } else {
+            play(0);
+          }
+        }));
+      }
     } else {
       ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
         if (index >= 0) play(index);
@@ -954,10 +1045,14 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       }));
     }
 
+    /* 技术详情 */
     const parts = [];
     if (code) {
       const names = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'SRC_NOT_SUPPORTED' };
       parts.push('MediaError ' + code + (names[code] ? ' (' + names[code] + ')' : ''));
+    }
+    if (priority === 'nodecode') {
+      parts.push('画面未能显示，建议换浏览器或换 MP4 格式的视频');
     }
     if (probe) {
       if (probe.ok) {
@@ -996,7 +1091,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   function hideOverlay() { overlay.hidden = true; }
 
   /* =========================================================
-     ⑩ 中央图标
+     ⑪ 中央图标
      ========================================================= */
   function hidePlayIcon() { playIcon.classList.remove('persist'); }
   function showPauseIcon() {
@@ -1005,7 +1100,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑪ 进度条
+     ⑫ 进度条
      ========================================================= */
   function updateProgress() {
     const d = video.duration;
@@ -1084,7 +1179,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('seeked', updateProgress);
 
   /* =========================================================
-     ⑫ 播放速度
+     ⑬ 播放速度
      ========================================================= */
   function setRate(rate, silent) {
     rate = Number(rate);
@@ -1126,7 +1221,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑬ 音量
+     ⑭ 音量
      ========================================================= */
   function paintVolume() {
     const v = video.muted ? 0 : video.volume;
@@ -1189,7 +1284,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('volumechange', paintVolume);
 
   /* =========================================================
-     ⑭ 播放 / 暂停
+     ⑮ 播放 / 暂停
      ========================================================= */
   function togglePlay() {
     if (video.paused) video.play().catch(() => {});
@@ -1199,13 +1294,29 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     btnPlay.innerHTML = video.paused ? SVG.play : SVG.pause;
   }
 
-  video.addEventListener('play', () => { updatePlayBtn(); hidePlayIcon(); });
+  video.addEventListener('play', () => {
+    updatePlayBtn();
+    hidePlayIcon();
+    scheduleVideoTrackCheck();
+  });
+
   video.addEventListener('pause', () => {
     updatePlayBtn();
+    clearVideoTrackCheck();
     if (switching) return;
+    if (noVideoTrackShown) return;
     showPauseIcon();
   });
-  video.addEventListener('ended', () => { updatePlayBtn(); showPauseIcon(); });
+
+  video.addEventListener('ended', () => {
+    updatePlayBtn();
+    clearVideoTrackCheck();
+    showPauseIcon();
+  });
+
+  video.addEventListener('seeked', () => {
+    if (!video.paused) scheduleVideoTrackCheck();
+  });
 
   stage.addEventListener('click', e => {
     if (e.target === video) {
@@ -1222,7 +1333,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑮ 列表
+     ⑯ 列表
      ========================================================= */
   function renderList() {
     listEl.innerHTML = '';
@@ -1242,7 +1353,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑯ 播放
+     ⑰ 播放
      ========================================================= */
   function play(i) {
     if (i < 0 || i >= playlist.length) return;
@@ -1257,7 +1368,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     hideOverlay();
     hidePlayIcon();
     clearTimeout(watchdog);
+    clearVideoTrackCheck();
     timedOut = false;
+    noVideoTrackShown = false;
 
     switching = true;
     video.pause();
@@ -1292,6 +1405,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
   video.addEventListener('error', () => {
     clearTimeout(watchdog);
+    clearVideoTrackCheck();
     hidePlayIcon();
     if (!(video.currentSrc || video.src)) return;
     showVideoError();
@@ -1302,7 +1416,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑰ 抽屉
+     ⑱ 抽屉
      ========================================================= */
   function setPanel(open) {
     panel.classList.toggle('open', open);
@@ -1315,7 +1429,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   scrim.addEventListener('click', () => setPanel(false));
 
   /* =========================================================
-     ⑱ 工具栏
+     ⑲ 工具栏
      ========================================================= */
   function showBar() {
     clearTimeout(barTimer);
@@ -1345,7 +1459,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑲ 全屏
+     ⑳ 全屏
      ========================================================= */
   function getFsEl() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -1376,7 +1490,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   );
 
   /* =========================================================
-     ⑳ 上一个 / 下一个 / 列表点击
+     ㉑ 上一个 / 下一个 / 列表点击
      ========================================================= */
   $('btnPrev').addEventListener('click', () => {
     if (index > 0) play(index - 1); else toast('已经是第一个了');
@@ -1392,7 +1506,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉑ 快捷键
+     ㉒ 快捷键
      ========================================================= */
   document.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toLowerCase();
@@ -1452,7 +1566,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉒ 启动
+     ㉓ 启动
      ========================================================= */
   renderList();
   updatePlayBtn();
@@ -1476,7 +1590,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ㉓ ?debug 可视化
+     ㉔ ?debug 可视化
      ========================================================= */
   if (location.search.indexOf('debug') > -1) {
     const badge = document.createElement('div');
@@ -1490,15 +1604,13 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     document.body.appendChild(badge);
 
     setInterval(function () {
-      const ua = navigator.userAgent || '';
-      const uaMatch = /android|iphone|ipod|ipad|blackberry|iemobile|opera mini|mobile|windows phone|webos|kindle|silk/i.test(ua);
-      const iPadMatch = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
       badge.textContent =
         'W: ' + window.innerWidth +
-        '\nUA移动: ' + (uaMatch ? '✓' : '✗') +
-        '\niPad: ' + (iPadMatch ? '✓' : '✗') +
-        '\nclass: ' + (document.body.classList.contains('mobile-mode') ? 'mobile-mode ✓' : '无') +
-        '\n判定: ' + (isMobile ? '移动端' : '桌面端');
+        '\nvideoWidth: ' + video.videoWidth +
+        '\nvideoHeight: ' + video.videoHeight +
+        '\nreadyState: ' + video.readyState +
+        '\ncurrentTime: ' + video.currentTime.toFixed(2) +
+        '\nnoVideoShown: ' + (noVideoTrackShown ? '✓' : '✗');
     }, 300);
   }
 })();
