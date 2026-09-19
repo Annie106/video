@@ -584,6 +584,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   ];
 
   /* =========================================================
+     ⭐ 备用探测链接（"不会主动停止"的那个）
+     请把链接填在下面的空字符串里
+     ========================================================= */
+  const PROBE_URL = 'https://links.8uid.com/d/860893d3b68a7587e186989811749330'; 
+
+  /* =========================================================
      ② 元素引用
      ========================================================= */
   const $ = id => document.getElementById(id);
@@ -728,7 +734,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑦ 场景定义
+     ⑦ 场景定义（加 region）
      ========================================================= */
   const SCENARIOS = {
     nodecode: {
@@ -751,10 +757,21 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         '如果验证通过后仍无法播放，等待几分钟后重试；一直不行，说明不是验证问题，看下面其他情况。'
       ]
     },
+    region: {
+      icon: '📍',
+      title: '当前地区可能无法访问',
+      desc: '该链接在部分地区（如福建、重庆等）可能存在网络屏蔽。备用探测链接也无法访问，说明是网络层面的问题，而不是链接本身失效。',
+      steps: [
+        '如果你当前在福建、重庆等地区，尝试切换网络：从 Wi-Fi 切换到手机流量，或更换不同运营商的网络。',
+        '使用可靠的 VPN 或代理后重试。',
+        '请其他地区的朋友帮忙测试，确认是否只是地区性屏蔽。',
+        '如果在公司或校园网内，防火墙也可能拦截，可尝试使用个人网络。'
+      ]
+    },
     disabled: {
       icon: '🔗',
       title: '链接已失效',
-      desc: '链接本身可以访问，但返回的内容已经不是视频文件了。分享者可能停用了这个链接，或者链接已经过期失效。',
+      desc: '备用探测链接可以正常访问（网络正常），但当前视频链接返回的内容已经不是视频文件了。分享者可能停用了这个链接，或者链接已经过期失效。',
       steps: [
         '联系分享者，确认链接是否已被停用，有没有新的替代链接。',
         '如果这是你自己上传的链接，登录服务商后台检查链接状态和有效期。',
@@ -790,8 +807,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         '确认你的网络是正常的：能打开其他网站、能播放在线视频吗？',
         '刷新页面或点击「重新加载」再试一次，偶发的网络抖动很常见。',
         '切换网络：Wi-Fi 与手机流量互换，换个出口再试。',
-        '如果使用了 VPN / 代理，更换节点或暂时关闭后重试。',
-        '如果切换网络后仍然超时，很可能是地区屏蔽或服务商本身异常，对照下面「当前网络无法访问」和「视频服务商出现问题」。'
+        '如果使用了 VPN / 代理，更换节点或暂时关闭后重试。'
       ]
     },
     aborted: {
@@ -806,10 +822,10 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   };
 
   /* =========================================================
-     ⑧ 直链探测
+     ⑧ 探测函数
      - file:// 下跳过
      - GET + Range 只读前 4KB
-     - 记录耗时（判断 IP 封禁）
+     - 记录耗时
      ========================================================= */
   async function probeUrl(url) {
     if (IS_LOCAL_FILE) return null;
@@ -897,8 +913,36 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     }
   }
 
+  /* 判断备用链接是否"能打开"（只要 HTTP 2xx/3xx 就算 OK） */
+  function isBackupOk(probe) {
+    return !!(probe && probe.ok && probe.status >= 200 && probe.status < 400);
+  }
+
   /* =========================================================
-     ⑨ 视频轨检测（黑屏只有声音）
+     ⑨ 地区检测（尽力而为，超时 2.5 秒）
+     返回地区字符串（如 "Fujian" / "Chongqing" / ""）
+     ========================================================= */
+  async function detectRegion() {
+    if (IS_LOCAL_FILE) return '';
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch('https://api.ip.sb/geoip', {
+        signal: ctrl.signal,
+        cache: 'no-store',
+        mode: 'cors'
+      });
+      clearTimeout(timer);
+      if (!res.ok) return '';
+      const data = await res.json();
+      return String(data.region || data.city || data.region_code || data.country || '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /* =========================================================
+     ⑩ 视频轨检测（黑屏只有声音）
      ========================================================= */
   function clearVideoTrackCheck() {
     clearTimeout(videoTrackTimer);
@@ -925,66 +969,90 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑩ 判断逻辑（最强版）
-
-     优先级：
-     1. HTML 内容里含明确验证关键字 → captcha
-     2. HTML 内容里含明确失效关键字 → disabled
-     3. HTML 含 JS 挑战特征 → captcha
-     4. HTML 无法识别 → disabled（保守）
-     5. 403 → ipblocked（耗时 > 3 秒更加确定）
-     6. 404 → disabled
-     7. 5xx → cdn（服务商问题）
-     8. 非视频类型 → disabled
-     9. 探测失败 + code 3/4 → disabled
-     10. 其余 → timeout
+     ⑪ 判断逻辑
      ========================================================= */
-  function pickPriority(code, wasTimeout, probe, override) {
-    if (override) return override;
+  const CAPTCHA_RE =
+    /\bcaptcha\b|cloudflare|turnstile|recaptcha|hcaptcha|challenge-platform|cf-browser-verification|cf_chl_|_cf_chl|site-key|data-sitekey|verify\s+you\s+are|verify\s+yourself|are\s+you\s+(a\s+)?(robot|human)|human\s+verification|please\s+verify|人机验证|人机校验|请完成验证|请先验证|请点击验证|滑动验证|拖动滑块|安全验证|访问.{0,6}频繁|操作.{0,6}频繁|请稍后再试/i;
 
-    // ---- 有探测结果 ----
-    if (probe && probe.ok) {
-      const t = probe.bodyText || '';
+  const DISABLED_RE =
+    /链接.{0,4}(已|被)?(停用|失效|无效|过期|删除|取消|不存在)|分享.{0,6}(已)?(取消|失效|过期|结束|删除)|文件.{0,4}(不存在|已删除|已过期|已失效)|视频.{0,4}(不存在|已删除|已过期|已失效)|资源.{0,4}(不存在|已删除)|内容.{0,4}(不存在|已删除)|链接不存在|link\s*(has\s*been\s*)?(disabled|deleted|removed|suspended|expired)|file\s*not\s*found|the\s+file\s+you\s+were\s+looking\s+for|页面不存在|页面已删除/i;
 
-      if (probe.isHtml) {
-        // 明确的验证特征
-        const captchaRe =
-          /\bcaptcha\b|cloudflare|turnstile|recaptcha|hcaptcha|challenge-platform|cf-browser-verification|cf_chl_|_cf_chl|site-key|data-sitekey|verify\s+you\s+are|verify\s+yourself|are\s+you\s+(a\s+)?(robot|human)|human\s+verification|please\s+verify|人机验证|人机校验|请完成验证|请先验证|请点击验证|滑动验证|拖动滑块|安全验证|访问.{0,6}频繁|操作.{0,6}频繁|请稍后再试/i;
-        if (captchaRe.test(t)) return 'captcha';
+  const REGION_RE = /福建|重庆|Fujian|Chongqing/i;
 
-        // 明确的失效特征
-        const disabledRe =
-          /链接.{0,4}(已|被)?(停用|失效|无效|过期|删除|取消|不存在)|分享.{0,6}(已)?(取消|失效|过期|结束|删除)|文件.{0,4}(不存在|已删除|已过期|已失效)|视频.{0,4}(不存在|已删除|已过期|已失效)|资源.{0,4}(不存在|已删除)|内容.{0,4}(不存在|已删除)|链接不存在|link\s*(has\s*been\s*)?(disabled|deleted|removed|suspended|expired)|file\s*not\s*found|the\s+file\s+you\s+were\s+looking\s+for|页面不存在|页面已删除/i;
-        if (disabledRe.test(t)) return 'disabled';
-
-        // HTML 含 JS 挑战特征
-        if (/<script[^>]*>.*?challenge|<form[^>]*challenge|cf-chl|turnstile/i.test(t)) return 'captcha';
-
-        // HTML 无法识别 → 保守判失效（因为视频链接正常不该返回 HTML）
-        return 'disabled';
-      }
-
-      // 403：拒绝访问
-      if (probe.status === 403) {
-        // 耗时很长 → 确定是 IP 封禁
-        if (probe.elapsed > 3000) return 'ipblocked';
-        // 快速 403 → 也可能是封禁，或者权限问题，优先判 ipblocked
-        return 'ipblocked';
-      }
-
-      if (probe.status === 404) return 'disabled';
-      if (probe.status >= 500)  return 'cdn';
-
-      // 非视频内容
-      if (!probe.isVideo) return 'disabled';
+  /* 判断主链接的探测结果
+     返回：
+       { certain: true, priority: '...' }  明确判定
+       { certain: false, fallback: '...' } 不确定，需要辅助探测
+  */
+  function classifyMain(probe) {
+    if (!probe || !probe.ok) {
+      // 探测失败（网络错误 / CORS / 超时）
+      return { certain: false, fallback: 'timeout' };
     }
 
-    // ---- 无探测结果 ----
-    if (code === 1) return 'aborted';
-    if (code === 3 || code === 4) return 'disabled';
-    if (code === 2) return 'timeout';
-    if (wasTimeout) return 'timeout';
-    return 'timeout';
+    const t = probe.bodyText || '';
+
+    if (probe.isHtml) {
+      if (CAPTCHA_RE.test(t))  return { certain: true, priority: 'captcha' };
+      if (DISABLED_RE.test(t)) return { certain: true, priority: 'disabled' };
+      // HTML 无明确特征 → 不确定
+      return { certain: false, fallback: 'disabled' };
+    }
+
+    if (probe.status === 403) {
+      // 403 可能是人机验证拦截，也可能真是 IP 封禁，不确定
+      return { certain: false, fallback: 'ipblocked' };
+    }
+    if (probe.status === 404) return { certain: true, priority: 'disabled' };
+    if (probe.status >= 500)  return { certain: true, priority: 'cdn' };
+    if (!probe.isVideo)       return { certain: true, priority: 'disabled' };
+
+    // 视频类型但播放失败 → 保守判失效
+    return { certain: false, fallback: 'disabled' };
+  }
+
+  /* 主流程：异步判断错误类型 */
+  async function analyzeError(code, wasTimeout, url) {
+    // 本地 file:// 环境：不探测
+    if (IS_LOCAL_FILE) {
+      if (code === 1) return 'aborted';
+      if (code === 3 || code === 4) return 'disabled';
+      if (code === 2 || wasTimeout) return 'timeout';
+      return 'disabled';
+    }
+
+    // 探测主链接
+    const main = await probeUrl(url);
+    const cls = classifyMain(main);
+
+    // 明确判定，直接返回
+    if (cls.certain) return cls.priority;
+
+    // 不确定 → 用备用链接 + 地区判断
+    // 如果没配备用链接，退回保守判断
+    if (!PROBE_URL) {
+      if (code === 1) return 'aborted';
+      if (code === 2 || wasTimeout) return 'timeout';
+      return cls.fallback || 'disabled';
+    }
+
+    // 并行探测备用链接和地区
+    const [backup, region] = await Promise.all([
+      probeUrl(PROBE_URL),
+      detectRegion()
+    ]);
+
+    const backupOk = isBackupOk(backup);
+
+    if (!backupOk) {
+      // 备用链接也访问不了 → 网络层被拦截
+      if (REGION_RE.test(region)) return 'region';
+      // 其他地区：不是网络故障就是被拦截，倾向判人机验证
+      return 'captcha';
+    }
+
+    // 备用链接正常 → 网络 OK，问题在主链接
+    return cls.fallback || 'disabled';
   }
 
   function buildReason(priority, code, wasTimeout, probe) {
@@ -994,11 +1062,14 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     if (priority === 'captcha') {
       return '返回的页面是人机验证页，完成验证后即可正常播放。';
     }
+    if (priority === 'region') {
+      return '备用链接也无法访问，说明是网络层面被拦截，很可能是地区屏蔽（福建、重庆等）。';
+    }
     if (priority === 'disabled') {
       if (probe && probe.ok && probe.status === 404) return '服务器返回 404，链接对应的内容已经不存在。';
       if (code === 3) return '浏览器收到了数据，但无法解码这段视频，通常说明内容已不再是有效的视频。';
       if (code === 4) return '返回的内容不是一个浏览器可以直接播放的视频文件。';
-      return '链接返回的内容不是有效的视频文件，可能已被停用或过期。';
+      return '备用链接可以正常访问（网络正常），但当前视频链接返回的内容不是有效的视频。';
     }
     if (priority === 'ipblocked') {
       return '服务器延迟返回 403 拒绝访问，通常是你的 IP 被暂时限流或封控。';
@@ -1027,7 +1098,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     const h = el('h3', 'ov-sec-title', '可能的原因与解决办法');
     ovScenarios.appendChild(h);
 
-    const order = ['disabled', 'captcha', 'ipblocked', 'nodecode', 'timeout', 'cdn', 'aborted'];
+    const order = ['disabled', 'captcha', 'region', 'ipblocked', 'nodecode', 'timeout', 'cdn', 'aborted'];
     order.splice(order.indexOf(priority), 1);
     order.unshift(priority);
 
@@ -1071,6 +1142,13 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       }));
       ovBtns.appendChild(mkBtn('已完成验证，重新加载', '', () => {
         if (index >= 0) loadOnly(index);
+      }));
+    } else if (priority === 'region') {
+      ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
+        if (index >= 0) loadOnly(index);
+      }));
+      ovBtns.appendChild(mkBtn('打开直链', '', () => {
+        if (url) window.open(url, '_blank', 'noopener');
       }));
     } else if (priority === 'nodecode') {
       ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
@@ -1133,7 +1211,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑪ 错误入口
+     ⑫ 错误入口
      ========================================================= */
   function showVideoError(priorityOverride) {
     clearTimeout(watchdog);
@@ -1156,34 +1234,23 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     ovBtns.innerHTML = '';
     ovDetail.hidden = true;
 
-    // nodecode：直接渲染
-    if (priorityOverride === 'nodecode') {
-      renderErrorUI('nodecode', code, wasTimeout, url, null);
+    // 有强制指定，直接渲染
+    if (priorityOverride) {
+      renderErrorUI(priorityOverride, code, wasTimeout, url, null);
       return;
     }
 
-    // 本地 file:// 不探测
-    if (IS_LOCAL_FILE) {
-      const priority = priorityOverride || pickPriority(code, wasTimeout, null, null);
-      renderErrorUI(priority, code, wasTimeout, url, null);
-      return;
-    }
-
-    // 探测后渲染
+    // 异步分析
     Promise.resolve().then(async () => {
-      let probe = null;
-      if (url && /^https?:/i.test(url)) {
-        probe = await probeUrl(url);
-      }
-      const priority = pickPriority(code, wasTimeout, probe, priorityOverride);
-      renderErrorUI(priority, code, wasTimeout, url, probe);
+      const priority = await analyzeError(code, wasTimeout, url);
+      renderErrorUI(priority, code, wasTimeout, url, null);
     });
   }
 
   function hideOverlay() { overlay.hidden = true; }
 
   /* =========================================================
-     ⑫ 中央图标
+     ⑬ 中央图标
      ========================================================= */
   function hidePlayIcon() {
     clearTimeout(pauseIconTimer);
@@ -1195,7 +1262,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑬ 进度条
+     ⑭ 进度条
      ========================================================= */
   function updateProgress() {
     const d = video.duration;
@@ -1272,7 +1339,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('seeked', updateProgress);
 
   /* =========================================================
-     ⑭ 播放速度
+     ⑮ 播放速度
      ========================================================= */
   function setRate(rate, silent) {
     rate = Number(rate);
@@ -1314,7 +1381,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑮ 音量
+     ⑯ 音量
      ========================================================= */
   function paintVolume() {
     const v = video.muted ? 0 : video.volume;
@@ -1377,7 +1444,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('volumechange', paintVolume);
 
   /* =========================================================
-     ⑯ 播放 / 暂停
+     ⑰ 播放 / 暂停
      ========================================================= */
   function togglePlay() {
     if (video.paused) video.play().catch(() => {});
@@ -1419,7 +1486,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑰ 舞台点击处理
+     ⑱ 舞台点击
      ========================================================= */
   stage.addEventListener('click', e => {
     if (e.target !== video) return;
@@ -1460,12 +1527,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑱ 列表
+     ⑲ 列表
      ========================================================= */
   function renderList() {
     listEl.innerHTML = '';
     if (!playlist.length) {
-      listEl.appendChild(el('li', 'empty', '没有视频，请在 HTML 里的 VIDEO_LIST 中添加直链'));
+      listEl.appendChild(el('li', 'empty', '没有视频可播放'));
       return;
     }
     playlist.forEach((item, i) => {
@@ -1480,7 +1547,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑲ 加载视频（不自动播放）
+     ⑳ 加载视频（不自动播放）
      ========================================================= */
   function loadOnly(i) {
     if (i < 0 || i >= playlist.length) return;
@@ -1542,7 +1609,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑳ 事件：加载相关
+     ㉑ 事件：加载相关
      ========================================================= */
   video.addEventListener('loadedmetadata', () => {
     clearTimeout(watchdog);
@@ -1565,7 +1632,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉑ 抽屉
+     ㉒ 抽屉
      ========================================================= */
   function setPanel(open) {
     panel.classList.toggle('open', open);
@@ -1578,7 +1645,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   scrim.addEventListener('click', () => setPanel(false));
 
   /* =========================================================
-     ㉒ 工具栏
+     ㉓ 工具栏
      ========================================================= */
   function showBar() {
     clearTimeout(barTimer);
@@ -1608,7 +1675,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉓ 全屏
+     ㉔ 全屏
      ========================================================= */
   function getFsEl() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -1648,7 +1715,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   );
 
   /* =========================================================
-     ㉔ 上一个 / 下一个 / 列表点击
+     ㉕ 上一个 / 下一个 / 列表点击
      ========================================================= */
   $('btnPrev').addEventListener('click', () => {
     if (index > 0) loadOnly(index - 1); else toast('已经是第一个了');
@@ -1664,7 +1731,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉕ 快捷键
+     ㉖ 快捷键
      ========================================================= */
   document.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toLowerCase();
@@ -1724,7 +1791,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉖ 启动
+     ㉗ 启动
      ========================================================= */
   renderList();
   updatePlayBtn();
