@@ -578,16 +578,15 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
      ① 视频直链列表
      ========================================================= */
   const VIDEO_LIST = [
-    { name: '花木兰', url: 'https://links.8uid.com/d/39eb4c585451d97e3ee2f66610ca1076' },
+    { name: '花木兰', url: 'https://links.8uid.com/d/742b815143b8aa3f1f54218547a1e404' },
     { name: '流浪地球2 1080p', url: 'https://links.8uid.com/d/cbf919ba5237ebce6509143cd3e6968a' },
     { name: '视频 2', url: 'https://links.8uid.com/d/e470cbd9a1b062d12257be3674cd06d5' }
   ];
 
   /* =========================================================
-     ⭐ 备用探测链接（"不会主动停止"的那个）
-     请把链接填在下面的空字符串里
+     ⭐ 备用探测链接（不会被主动停止，但也会受人机验证影响）
      ========================================================= */
-  const PROBE_URL = 'https://links.8uid.com/d/860893d3b68a7587e186989811749330'; 
+  const PROBE_URL = 'https://links.8uid.com/d/860893d3b68a7587e186989811749330';
 
   /* =========================================================
      ② 元素引用
@@ -734,7 +733,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑦ 场景定义（加 region）
+     ⑦ 场景定义（7 种）
      ========================================================= */
   const SCENARIOS = {
     nodecode: {
@@ -760,7 +759,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     region: {
       icon: '📍',
       title: '当前地区可能无法访问',
-      desc: '该链接在部分地区（如福建、重庆等）可能存在网络屏蔽。备用探测链接也无法访问，说明是网络层面的问题，而不是链接本身失效。',
+      desc: '该链接在部分地区（如福建、重庆等）可能存在网络屏蔽。',
       steps: [
         '如果你当前在福建、重庆等地区，尝试切换网络：从 Wi-Fi 切换到手机流量，或更换不同运营商的网络。',
         '使用可靠的 VPN 或代理后重试。',
@@ -771,7 +770,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     disabled: {
       icon: '🔗',
       title: '链接已失效',
-      desc: '备用探测链接可以正常访问（网络正常），但当前视频链接返回的内容已经不是视频文件了。分享者可能停用了这个链接，或者链接已经过期失效。',
+      desc: '链接返回的内容不是视频文件。分享者可能停用了这个链接，或者链接已经过期失效。',
       steps: [
         '联系分享者，确认链接是否已被停用，有没有新的替代链接。',
         '如果这是你自己上传的链接，登录服务商后台检查链接状态和有效期。',
@@ -781,7 +780,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     ipblocked: {
       icon: '⛔',
       title: 'IP 可能被暂时限流',
-      desc: '服务器延迟很久后返回 403 拒绝访问，通常是你的 IP 被服务商暂时限流或封控。',
+      desc: '短时间内大量访问导致你的 IP 被服务商暂时限流，触发了安全机制。',
       steps: [
         '等待 10–30 分钟后再重试，通常会自动解除。',
         '切换网络环境（如从 Wi-Fi 切换到手机流量，IP 会变化）。',
@@ -822,105 +821,47 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   };
 
   /* =========================================================
-     ⑧ 探测函数
-     - file:// 下跳过
-     - GET + Range 只读前 4KB
-     - 记录耗时
+     ⑧ 备用链接探测（用 video 元素，不用 fetch，避免触发封控）
      ========================================================= */
-  async function probeUrl(url) {
-    if (IS_LOCAL_FILE) return null;
-    if (!url || !/^https?:/i.test(url)) return null;
+  function probeBackupByVideo(url, timeoutMs) {
+    return new Promise(function (resolve) {
+      if (!url || !/^https?:/i.test(url)) { resolve(false); return; }
 
-    const startTime = Date.now();
+      const v = document.createElement('video');
+      v.muted = true;
+      v.preload = 'metadata';
+      v.playsInline = true;
 
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
+      let settled = false;
+      const cleanup = () => {
+        v.onloadedmetadata = null;
+        v.onerror = null;
+        try { v.removeAttribute('src'); v.load(); } catch (e) {}
+      };
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(ok);
+      };
 
-      const res = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store',
-        mode: 'cors',
-        signal: ctrl.signal,
-        headers: { 'Range': 'bytes=0-4095' }
-      });
+      const timer = setTimeout(() => finish(false), timeoutMs || 8000);
 
-      const elapsed = Date.now() - startTime;
-      const ct = (res.headers.get('content-type') || '').toLowerCase();
-      const isHtml = ct.includes('text/html');
-      const isVideo = ct.includes('video/') ||
-                      ct.includes('application/octet-stream') ||
-                      ct.includes('application/mp4') ||
-                      ct.includes('application/x-mpegurl') ||
-                      ct.includes('application/vnd.apple.mpegurl') ||
-                      ct.includes('application/dash+xml');
+      v.onloadedmetadata = () => { clearTimeout(timer); finish(true); };
+      v.onerror = () => { clearTimeout(timer); finish(false); };
 
-      let bodyText = '';
-      if (isHtml) {
-        try {
-          const reader = res.body ? res.body.getReader() : null;
-          if (reader) {
-            const chunks = [];
-            let total = 0;
-            const readPromise = (async () => {
-              while (total < 4096) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                total += value.length;
-              }
-            })();
-            const readTimeout = new Promise(resolve => setTimeout(resolve, 1500));
-            await Promise.race([readPromise, readTimeout]);
-            try { reader.cancel(); } catch (e) {}
-
-            const buf = new Uint8Array(total);
-            let offset = 0;
-            for (const c of chunks) {
-              if (offset + c.length > buf.length) {
-                buf.set(c.slice(0, buf.length - offset), offset);
-                break;
-              }
-              buf.set(c, offset);
-              offset += c.length;
-            }
-            bodyText = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-          }
-        } catch (e) {
-          bodyText = '';
-        }
-      } else {
-        try { if (res.body && res.body.cancel) res.body.cancel(); } catch (e) {}
+      try {
+        v.src = url;
+        v.load();
+      } catch (e) {
+        clearTimeout(timer);
+        finish(false);
       }
-
-      clearTimeout(timer);
-      return {
-        ok: true,
-        status: res.status,
-        contentType: ct,
-        isHtml,
-        isVideo,
-        bodyText,
-        elapsed
-      };
-    } catch (e) {
-      return {
-        ok: false,
-        error: (e && e.name === 'AbortError') ? 'timeout' : ((e && e.message) || String(e)),
-        elapsed: Date.now() - startTime
-      };
-    }
-  }
-
-  /* 判断备用链接是否"能打开"（只要 HTTP 2xx/3xx 就算 OK） */
-  function isBackupOk(probe) {
-    return !!(probe && probe.ok && probe.status >= 200 && probe.status < 400);
+    });
   }
 
   /* =========================================================
-     ⑨ 地区检测（尽力而为，超时 2.5 秒）
-     返回地区字符串（如 "Fujian" / "Chongqing" / ""）
+     ⑨ 地区检测（api.ip.sb 支持 CORS）
      ========================================================= */
   async function detectRegion() {
     if (IS_LOCAL_FILE) return '';
@@ -940,6 +881,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       return '';
     }
   }
+
+  const REGION_RE = /福建|重庆|Fujian|Chongqing/i;
 
   /* =========================================================
      ⑩ 视频轨检测（黑屏只有声音）
@@ -969,90 +912,60 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑪ 判断逻辑
+     ⑪ 错误分析主流程
+
+     判断依据：
+     1. MediaError code
+     2. 备用链接是否可达（video 元素加载）
+     3. 用户所在地区
+
+     判定表：
+     code 1                          → aborted
+     code 3                          → disabled（拿到了数据但无法解码）
+     备用链接可达 + code 4           → disabled（网络 OK，主链接返回非视频）
+     备用链接可达 + code 2 / 超时    → timeout（网络 OK，主链接超时）
+     备用链接不可达 + 福建/重庆      → region（地区屏蔽）
+     备用链接不可达 + 其他地区       → captcha（人机验证拦截）
      ========================================================= */
-  const CAPTCHA_RE =
-    /\bcaptcha\b|cloudflare|turnstile|recaptcha|hcaptcha|challenge-platform|cf-browser-verification|cf_chl_|_cf_chl|site-key|data-sitekey|verify\s+you\s+are|verify\s+yourself|are\s+you\s+(a\s+)?(robot|human)|human\s+verification|please\s+verify|人机验证|人机校验|请完成验证|请先验证|请点击验证|滑动验证|拖动滑块|安全验证|访问.{0,6}频繁|操作.{0,6}频繁|请稍后再试/i;
-
-  const DISABLED_RE =
-    /链接.{0,4}(已|被)?(停用|失效|无效|过期|删除|取消|不存在)|分享.{0,6}(已)?(取消|失效|过期|结束|删除)|文件.{0,4}(不存在|已删除|已过期|已失效)|视频.{0,4}(不存在|已删除|已过期|已失效)|资源.{0,4}(不存在|已删除)|内容.{0,4}(不存在|已删除)|链接不存在|link\s*(has\s*been\s*)?(disabled|deleted|removed|suspended|expired)|file\s*not\s*found|the\s+file\s+you\s+were\s+looking\s+for|页面不存在|页面已删除/i;
-
-  const REGION_RE = /福建|重庆|Fujian|Chongqing/i;
-
-  /* 判断主链接的探测结果
-     返回：
-       { certain: true, priority: '...' }  明确判定
-       { certain: false, fallback: '...' } 不确定，需要辅助探测
-  */
-  function classifyMain(probe) {
-    if (!probe || !probe.ok) {
-      // 探测失败（网络错误 / CORS / 超时）
-      return { certain: false, fallback: 'timeout' };
-    }
-
-    const t = probe.bodyText || '';
-
-    if (probe.isHtml) {
-      if (CAPTCHA_RE.test(t))  return { certain: true, priority: 'captcha' };
-      if (DISABLED_RE.test(t)) return { certain: true, priority: 'disabled' };
-      // HTML 无明确特征 → 不确定
-      return { certain: false, fallback: 'disabled' };
-    }
-
-    if (probe.status === 403) {
-      // 403 可能是人机验证拦截，也可能真是 IP 封禁，不确定
-      return { certain: false, fallback: 'ipblocked' };
-    }
-    if (probe.status === 404) return { certain: true, priority: 'disabled' };
-    if (probe.status >= 500)  return { certain: true, priority: 'cdn' };
-    if (!probe.isVideo)       return { certain: true, priority: 'disabled' };
-
-    // 视频类型但播放失败 → 保守判失效
-    return { certain: false, fallback: 'disabled' };
-  }
-
-  /* 主流程：异步判断错误类型 */
   async function analyzeError(code, wasTimeout, url) {
-    // 本地 file:// 环境：不探测
     if (IS_LOCAL_FILE) {
       if (code === 1) return 'aborted';
-      if (code === 3 || code === 4) return 'disabled';
+      if (code === 3) return 'disabled';
+      if (code === 4) return 'disabled';
       if (code === 2 || wasTimeout) return 'timeout';
       return 'disabled';
     }
 
-    // 探测主链接
-    const main = await probeUrl(url);
-    const cls = classifyMain(main);
+    // MediaError 1：用户主动中断
+    if (code === 1) return 'aborted';
 
-    // 明确判定，直接返回
-    if (cls.certain) return cls.priority;
+    // MediaError 3：拿到了数据但无法解码 → 内容本身有问题
+    if (code === 3) return 'disabled';
 
-    // 不确定 → 用备用链接 + 地区判断
-    // 如果没配备用链接，退回保守判断
+    // 没配备用链接，退回保守判断
     if (!PROBE_URL) {
-      if (code === 1) return 'aborted';
+      if (code === 4) return 'disabled';
       if (code === 2 || wasTimeout) return 'timeout';
-      return cls.fallback || 'disabled';
+      return 'disabled';
     }
 
-    // 并行探测备用链接和地区
-    const [backup, region] = await Promise.all([
-      probeUrl(PROBE_URL),
+    // 并行：探测备用链接 + 检测地区
+    const [backupOk, region] = await Promise.all([
+      probeBackupByVideo(PROBE_URL, 8000),
       detectRegion()
     ]);
-
-    const backupOk = isBackupOk(backup);
 
     if (!backupOk) {
       // 备用链接也访问不了 → 网络层被拦截
       if (REGION_RE.test(region)) return 'region';
-      // 其他地区：不是网络故障就是被拦截，倾向判人机验证
+      // 其他地区：网络层面被拦截 → 人机验证
       return 'captcha';
     }
 
     // 备用链接正常 → 网络 OK，问题在主链接
-    return cls.fallback || 'disabled';
+    if (code === 4) return 'disabled';
+    if (code === 2 || wasTimeout) return 'timeout';
+    return 'disabled';
   }
 
   function buildReason(priority, code, wasTimeout, probe) {
@@ -1060,14 +973,13 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       return '这个视频的声音可以播放，但画面无法显示。你当前用的浏览器不支持这个视频使用的画面格式。';
     }
     if (priority === 'captcha') {
-      return '返回的页面是人机验证页，完成验证后即可正常播放。';
+      return '备用链接也无法访问，说明是网络层面被拦截，很可能是触发了人机验证机制。';
     }
     if (priority === 'region') {
       return '备用链接也无法访问，说明是网络层面被拦截，很可能是地区屏蔽（福建、重庆等）。';
     }
     if (priority === 'disabled') {
-      if (probe && probe.ok && probe.status === 404) return '服务器返回 404，链接对应的内容已经不存在。';
-      if (code === 3) return '浏览器收到了数据，但无法解码这段视频，通常说明内容已不再是有效的视频。';
+      if (code === 3) return '浏览器收到了视频数据，但无法解码，通常说明视频文件本身已经损坏或格式不兼容。';
       if (code === 4) return '返回的内容不是一个浏览器可以直接播放的视频文件。';
       return '备用链接可以正常访问（网络正常），但当前视频链接返回的内容不是有效的视频。';
     }
@@ -1075,10 +987,10 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       return '服务器延迟返回 403 拒绝访问，通常是你的 IP 被暂时限流或封控。';
     }
     if (priority === 'cdn') {
-      return '视频服务商返回了 ' + (probe && probe.status ? probe.status : '5xx') + ' 错误，服务暂时不可用。';
+      return '视频服务商返回错误，服务暂时不可用。';
     }
     if (priority === 'timeout') {
-      if (wasTimeout) return '等待 25 秒后仍然没有收到视频数据。';
+      if (wasTimeout) return '等待 60 秒后仍然没有收到视频数据。';
       return '浏览器没能从服务器获取视频数据，连接超时或被中断。';
     }
     if (priority === 'aborted') return '视频加载过程被中断了。';
@@ -1187,20 +1099,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     if (priority === 'nodecode') {
       parts.push('画面未能显示，建议换浏览器或换 MP4 格式的视频');
     }
-    if (probe) {
-      if (probe.ok) {
-        if (probe.status) parts.push('HTTP ' + probe.status);
-        if (probe.contentType) parts.push('Content-Type: ' + probe.contentType);
-        if (probe.elapsed != null) parts.push('耗时 ' + probe.elapsed + 'ms');
-      } else if (probe.error) {
-        parts.push('probe: ' + probe.error);
-      }
-    }
     if (video.networkState != null) {
       const ns = { 0: 'NETWORK_EMPTY', 1: 'NETWORK_IDLE', 2: 'NETWORK_LOADING', 3: 'NETWORK_NO_SOURCE' };
       parts.push('network=' + (ns[video.networkState] || video.networkState));
     }
-    if (wasTimeout) parts.push('超时(25s)');
+    if (wasTimeout) parts.push('超时(60s)');
 
     if (parts.length) {
       ovDetail.textContent = parts.join('  ·  ');
@@ -1225,7 +1128,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     const wasTimeout = timedOut;
     timedOut = false;
 
-    // 展示"诊断中"
     overlay.hidden = false;
     ovIcon.textContent = '⚠️';
     ovTitle.textContent = '视频加载失败';
@@ -1234,13 +1136,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     ovBtns.innerHTML = '';
     ovDetail.hidden = true;
 
-    // 有强制指定，直接渲染
     if (priorityOverride) {
       renderErrorUI(priorityOverride, code, wasTimeout, url, null);
       return;
     }
 
-    // 异步分析
     Promise.resolve().then(async () => {
       const priority = await analyzeError(code, wasTimeout, url);
       renderErrorUI(priority, code, wasTimeout, url, null);
@@ -1600,12 +1500,13 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     };
     video.addEventListener('loadedmetadata', onMeta);
 
+    // 60 秒内还没有任何数据才算超时
     watchdog = setTimeout(() => {
       if (video.readyState < 1) {
         timedOut = true;
         showVideoError();
       }
-    }, 25000);
+    }, 60000);
   }
 
   /* =========================================================
@@ -1618,6 +1519,13 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
   video.addEventListener('loadeddata', () => clearTimeout(watchdog));
   video.addEventListener('canplay',    () => clearTimeout(watchdog));
+  video.addEventListener('playing',    () => clearTimeout(watchdog));
+  video.addEventListener('suspend',    () => {
+    if (video.readyState >= 1) clearTimeout(watchdog);
+  });
+  video.addEventListener('progress',   () => {
+    if (video.readyState >= 1 || video.buffered.length > 0) clearTimeout(watchdog);
+  });
 
   video.addEventListener('error', () => {
     clearTimeout(watchdog);
