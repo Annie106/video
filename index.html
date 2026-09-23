@@ -42,6 +42,7 @@ button.primary:hover{
 #stage{position:fixed;inset:0;background:#000;overflow:hidden}
 #player{width:100%;height:100%;object-fit:contain;background:#000;display:block;outline:none}
 
+/* 左上角水印 */
 #watermark{
   position:absolute;top:16px;left:18px;z-index:12;
   pointer-events:none;user-select:none;
@@ -55,6 +56,34 @@ button.primary:hover{
   color:transparent;-webkit-text-fill-color:transparent;
   text-shadow:0 1px 8px rgba(0,0,0,.55);
   filter:drop-shadow(0 1px 3px rgba(0,0,0,.5));
+}
+
+
+
+/* 中央加载动画 */
+#loadingBox{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  z-index:19;pointer-events:none;user-select:none;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+  opacity:0;transition:opacity .2s;
+}
+#loadingBox.show{opacity:1}
+.spinner{
+  width:46px;height:46px;
+  border:3px solid rgba(255,255,255,.12);
+  border-top-color:#4f8cff;
+  border-right-color:rgba(79,140,255,.6);
+  border-radius:50%;
+  animation:spin .9s linear infinite;
+  box-shadow:0 0 24px rgba(79,140,255,.35);
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{
+  font-size:12.5px;
+  color:rgba(255,255,255,.7);
+  text-shadow:0 1px 4px rgba(0,0,0,.85);
+  letter-spacing:.6px;
 }
 
 #playIcon{
@@ -81,11 +110,6 @@ button.primary:hover{
   opacity:0;pointer-events:none;transition:opacity .25s;
 }
 #bar.show{opacity:1;pointer-events:auto}
-
-body.mobile-mode:not(.in-fullscreen) #bar{
-  opacity:1 !important;
-  pointer-events:auto !important;
-}
 
 body.mobile-mode .icon-btn{width:44px;height:44px}
 body.mobile-mode .icon-btn svg{width:20px;height:20px}
@@ -334,6 +358,35 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 .item .meta{flex:1;min-width:0}
 .item .nm{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* 联系我们 */
+.p-foot{
+  flex:none;
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.25));
+}
+.contact-btn{
+  display:block;
+  width:100%;
+  padding:10px 12px;
+  font-size:14px;
+  font-weight:500;
+  text-align:center;
+  border-radius:10px;
+  background:linear-gradient(135deg,rgba(79,140,255,.22),rgba(79,140,255,.08));
+  border:1px solid rgba(79,140,255,.35);
+  color:#a8c4ff;
+  cursor:pointer;
+  letter-spacing:.5px;
+  transition:.18s;
+}
+.contact-btn:hover{
+  background:linear-gradient(135deg,rgba(79,140,255,.42),rgba(79,140,255,.18));
+  border-color:rgba(79,140,255,.6);
+  color:#fff;
+}
+.contact-btn:active{transform:scale(.98)}
+
 #overlay{
   position:absolute;inset:0;z-index:20;
   display:flex;align-items:flex-start;justify-content:center;
@@ -443,6 +496,24 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 }
 .ov-btns{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
 
+#imgLoadingOverlay{
+  position:fixed;inset:0;z-index:9999;
+  background:#000;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+#imgLoadingOverlay[hidden]{display:none}
+#imgLoadingOverlay img{
+  max-width:100%;max-height:100%;
+  object-fit:contain;
+  display:block;
+}
+#imgLoadingOverlay .hint{
+  position:absolute;bottom:24px;left:0;right:0;
+  text-align:center;color:#8b8b96;font-size:13px;
+  pointer-events:none;
+}
+
 #toast{
   position:fixed;left:50%;bottom:110px;z-index:100;
   transform:translate(-50%,10px);
@@ -462,6 +533,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   <video id="player" playsinline preload="metadata"></video>
 
   <div id="watermark">RH 工作室</div>
+
+  <!-- 中央加载动画 -->
+  <div id="loadingBox">
+    <div class="spinner"></div>
+    <div class="loading-text">加载中…</div>
+  </div>
 
   <div id="playIcon">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l12-7z"/></svg>
@@ -495,7 +572,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         </svg>
       </button>
 
-      <button class="icon-btn big" id="btnPlay" title="播放/暂停 (空格)" aria-label="播放/暂停">
+      <button class="icon-btn big" id="btnPlay" title="播放/暂停 (双击画面)" aria-label="播放/暂停">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l14-8z"/></svg>
       </button>
 
@@ -556,6 +633,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       </button>
     </div>
     <ul id="list"></ul>
+    <div class="p-foot">
+      <button class="contact-btn" id="btnContact" type="button">联系我们</button>
+    </div>
   </aside>
 
   <div id="overlay" hidden>
@@ -570,6 +650,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   </div>
 </div>
 
+<div id="imgLoadingOverlay" hidden>
+  <img id="imgLoadingEl" alt="">
+  <div class="hint">正在判断问题…</div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -578,15 +663,13 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
      ① 视频直链列表
      ========================================================= */
   const VIDEO_LIST = [
-    { name: '花木兰', url: 'https://links.8uid.com/d/742b815143b8aa3f1f54218547a1e404' },
-    { name: '流浪地球2 1080p', url: 'https://links.8uid.com/d/cbf919ba5237ebce6509143cd3e6968a' },
-    { name: '视频 2', url: 'https://links.8uid.com/d/e470cbd9a1b062d12257be3674cd06d5' }
+    { name: '花木兰', url: 'https://links.8uid.com/d/bbe987ca4f8ebcd9ff93f9761c2f6c32' },
+    { name: '流浪地球2 1080p', url: 'https://links.8uid.com/d/e67ba483c20b2206326ad366b7927a8b' },
+    { name: '视频 2', url: 'https://links.8uid.com/d/e41689ac5b8eaa73f943e45f3a42a321' }
   ];
 
-  /* =========================================================
-     ⭐ 备用探测链接（不会被主动停止，但也会受人机验证影响）
-     ========================================================= */
-  const PROBE_URL = 'https://links.8uid.com/d/860893d3b68a7587e186989811749330';
+  const PROBE_IMAGE_URL = 'https://links.8uid.com/d/5f32af891af0e4462dc5c62d937ac8cf';
+  const CONTACT_URL = 'https://annie106.github.io/annie106';
 
   /* =========================================================
      ② 元素引用
@@ -607,11 +690,15 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   const timeCurrent    = $('timeCurrent');
   const timeTotal      = $('timeTotal');
 
+  const imgLoadingOverlay = $('imgLoadingOverlay');
+  const imgLoadingEl      = $('imgLoadingEl');
+
+  const loadingBox   = $('loadingBox');
+
   /* =========================================================
      ③ 全局状态
      ========================================================= */
-  const DESKTOP_HIDE_DELAY = 400;
-  const TOUCH_HIDE_DELAY   = 7000;
+  const HIDE_DELAY = 7000;   // 工具栏显示后 7 秒自动隐藏（桌面端和移动端统一）
   const HOT_ZONE = 170;
   const VIDEO_TRACK_CHECK_DELAY = 3000;
   const DOUBLE_TAP_DELAY = 280;
@@ -652,17 +739,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   function applyMobileMode() {
     const mobile = detectMobile();
     document.body.classList.toggle('mobile-mode', mobile);
-
     if (mobile === isMobile) return;
     isMobile = mobile;
-
-    if (isMobile) {
-      clearTimeout(barTimer);
-      if (!getFsEl()) bar.classList.add('show');
-    } else {
-      showBar();
-      scheduleHide(DESKTOP_HIDE_DELAY);
-    }
   }
 
   applyMobileMode();
@@ -733,7 +811,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑦ 场景定义（7 种）
+     ⑦ 场景定义
      ========================================================= */
   const SCENARIOS = {
     nodecode: {
@@ -749,7 +827,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     captcha: {
       icon: '🛡️',
       title: '需要人机验证',
-      desc: '短时间内多次访问触发了服务商的安全机制，需要在直链页面完成人机验证后，视频才能正常加载。',
+      desc: '遇到错误，网络层面被拦截。可能是短时间内多次访问触发了服务商的人机验证机制。',
       steps: [
         '点击下方「打开直链完成验证」，在新窗口中完成人机验证（勾选、拼图、滑块等）。',
         '验证成功后回到本页面，点击「已完成验证，重新加载」。',
@@ -759,7 +837,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     region: {
       icon: '📍',
       title: '当前地区可能无法访问',
-      desc: '该链接在部分地区（如福建、重庆等）可能存在网络屏蔽。',
+      desc: '无法加载，说明网络层面被拦截。该链接在部分地区（如福建、重庆等）可能存在网络屏蔽。',
       steps: [
         '如果你当前在福建、重庆等地区，尝试切换网络：从 Wi-Fi 切换到手机流量，或更换不同运营商的网络。',
         '使用可靠的 VPN 或代理后重试。',
@@ -770,43 +848,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     disabled: {
       icon: '🔗',
       title: '链接已失效',
-      desc: '链接返回的内容不是视频文件。分享者可能停用了这个链接，或者链接已经过期失效。',
+      desc: '图片可以正常加载（网络正常），但当前视频链接返回的内容不是有效的视频文件。分享者可能停用了这个链接，或者链接已经过期失效。',
       steps: [
         '联系分享者，确认链接是否已被停用，有没有新的替代链接。',
         '如果这是你自己上传的链接，登录服务商后台检查链接状态和有效期。',
         '尝试使用其他可用的备用链接。'
-      ]
-    },
-    ipblocked: {
-      icon: '⛔',
-      title: 'IP 可能被暂时限流',
-      desc: '短时间内大量访问导致你的 IP 被服务商暂时限流，触发了安全机制。',
-      steps: [
-        '等待 10–30 分钟后再重试，通常会自动解除。',
-        '切换网络环境（如从 Wi-Fi 切换到手机流量，IP 会变化）。',
-        '避免短时间内反复刷新或重试，否则会延长封控时间。',
-        '如果持续受限，联系服务商客服反馈。'
-      ]
-    },
-    cdn: {
-      icon: '🌐',
-      title: '视频服务商出现问题',
-      desc: '视频服务商当前无法正常提供内容，可能是服务器故障、CDN 节点异常或维护中。这不是你的问题，也不是链接本身的问题，通常是暂时的。',
-      steps: [
-        '等待几分钟到几小时后再试。服务恢复后会自动正常。',
-        '查看视频服务商的官方公告、状态页面或客服渠道，确认是否有故障通知。',
-        '如果长时间无法恢复，联系分享者获取备用链接。'
-      ]
-    },
-    timeout: {
-      icon: '⏱️',
-      title: '链接访问失败 · 访问超时',
-      desc: '浏览器在规定时间内没能连上视频服务商，或者连接中途断开。常见原因是网络不稳定、服务商响应慢、地区网络屏蔽、代理或 VPN 不稳定。',
-      steps: [
-        '确认你的网络是正常的：能打开其他网站、能播放在线视频吗？',
-        '刷新页面或点击「重新加载」再试一次，偶发的网络抖动很常见。',
-        '切换网络：Wi-Fi 与手机流量互换，换个出口再试。',
-        '如果使用了 VPN / 代理，更换节点或暂时关闭后重试。'
       ]
     },
     aborted: {
@@ -821,71 +867,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   };
 
   /* =========================================================
-     ⑧ 备用链接探测（用 video 元素，不用 fetch，避免触发封控）
-     ========================================================= */
-  function probeBackupByVideo(url, timeoutMs) {
-    return new Promise(function (resolve) {
-      if (!url || !/^https?:/i.test(url)) { resolve(false); return; }
-
-      const v = document.createElement('video');
-      v.muted = true;
-      v.preload = 'metadata';
-      v.playsInline = true;
-
-      let settled = false;
-      const cleanup = () => {
-        v.onloadedmetadata = null;
-        v.onerror = null;
-        try { v.removeAttribute('src'); v.load(); } catch (e) {}
-      };
-      const finish = (ok) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(ok);
-      };
-
-      const timer = setTimeout(() => finish(false), timeoutMs || 8000);
-
-      v.onloadedmetadata = () => { clearTimeout(timer); finish(true); };
-      v.onerror = () => { clearTimeout(timer); finish(false); };
-
-      try {
-        v.src = url;
-        v.load();
-      } catch (e) {
-        clearTimeout(timer);
-        finish(false);
-      }
-    });
-  }
-
-  /* =========================================================
-     ⑨ 地区检测（api.ip.sb 支持 CORS）
-     ========================================================= */
-  async function detectRegion() {
-    if (IS_LOCAL_FILE) return '';
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 2500);
-      const res = await fetch('https://api.ip.sb/geoip', {
-        signal: ctrl.signal,
-        cache: 'no-store',
-        mode: 'cors'
-      });
-      clearTimeout(timer);
-      if (!res.ok) return '';
-      const data = await res.json();
-      return String(data.region || data.city || data.region_code || data.country || '');
-    } catch (e) {
-      return '';
-    }
-  }
-
-  const REGION_RE = /福建|重庆|Fujian|Chongqing/i;
-
-  /* =========================================================
-     ⑩ 视频轨检测（黑屏只有声音）
+     ⑧ 视频轨检测（黑屏只有声音）
      ========================================================= */
   function clearVideoTrackCheck() {
     clearTimeout(videoTrackTimer);
@@ -912,110 +894,96 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑪ 错误分析主流程
-
-     判断依据：
-     1. MediaError code
-     2. 备用链接是否可达（video 元素加载）
-     3. 用户所在地区
-
-     判定表：
-     code 1                          → aborted
-     code 3                          → disabled（拿到了数据但无法解码）
-     备用链接可达 + code 4           → disabled（网络 OK，主链接返回非视频）
-     备用链接可达 + code 2 / 超时    → timeout（网络 OK，主链接超时）
-     备用链接不可达 + 福建/重庆      → region（地区屏蔽）
-     备用链接不可达 + 其他地区       → captcha（人机验证拦截）
+     ⑨ 地区检测
      ========================================================= */
-  async function analyzeError(code, wasTimeout, url) {
-    if (IS_LOCAL_FILE) {
-      if (code === 1) return 'aborted';
-      if (code === 3) return 'disabled';
-      if (code === 4) return 'disabled';
-      if (code === 2 || wasTimeout) return 'timeout';
-      return 'disabled';
+  async function detectRegion() {
+    if (IS_LOCAL_FILE) return '';
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch('https://api.ip.sb/geoip', {
+        signal: ctrl.signal,
+        cache: 'no-store',
+        mode: 'cors'
+      });
+      clearTimeout(timer);
+      if (!res.ok) return '';
+      const data = await res.json();
+      return String(data.region || data.city || data.region_code || data.country || '');
+    } catch (e) {
+      return '';
     }
-
-    // MediaError 1：用户主动中断
-    if (code === 1) return 'aborted';
-
-    // MediaError 3：拿到了数据但无法解码 → 内容本身有问题
-    if (code === 3) return 'disabled';
-
-    // 没配备用链接，退回保守判断
-    if (!PROBE_URL) {
-      if (code === 4) return 'disabled';
-      if (code === 2 || wasTimeout) return 'timeout';
-      return 'disabled';
-    }
-
-    // 并行：探测备用链接 + 检测地区
-    const [backupOk, region] = await Promise.all([
-      probeBackupByVideo(PROBE_URL, 8000),
-      detectRegion()
-    ]);
-
-    if (!backupOk) {
-      // 备用链接也访问不了 → 网络层被拦截
-      if (REGION_RE.test(region)) return 'region';
-      // 其他地区：网络层面被拦截 → 人机验证
-      return 'captcha';
-    }
-
-    // 备用链接正常 → 网络 OK，问题在主链接
-    if (code === 4) return 'disabled';
-    if (code === 2 || wasTimeout) return 'timeout';
-    return 'disabled';
   }
 
-  function buildReason(priority, code, wasTimeout, probe) {
-    if (priority === 'nodecode') {
-      return '这个视频的声音可以播放，但画面无法显示。你当前用的浏览器不支持这个视频使用的画面格式。';
-    }
-    if (priority === 'captcha') {
-      return '备用链接也无法访问，说明是网络层面被拦截，很可能是触发了人机验证机制。';
-    }
-    if (priority === 'region') {
-      return '备用链接也无法访问，说明是网络层面被拦截，很可能是地区屏蔽（福建、重庆等）。';
-    }
-    if (priority === 'disabled') {
-      if (code === 3) return '浏览器收到了视频数据，但无法解码，通常说明视频文件本身已经损坏或格式不兼容。';
-      if (code === 4) return '返回的内容不是一个浏览器可以直接播放的视频文件。';
-      return '备用链接可以正常访问（网络正常），但当前视频链接返回的内容不是有效的视频。';
-    }
-    if (priority === 'ipblocked') {
-      return '服务器延迟返回 403 拒绝访问，通常是你的 IP 被暂时限流或封控。';
-    }
-    if (priority === 'cdn') {
-      return '视频服务商返回错误，服务暂时不可用。';
-    }
-    if (priority === 'timeout') {
-      if (wasTimeout) return '等待 60 秒后仍然没有收到视频数据。';
-      return '浏览器没能从服务器获取视频数据，连接超时或被中断。';
-    }
-    if (priority === 'aborted') return '视频加载过程被中断了。';
-    return '视频无法播放。';
+  const REGION_RE = /福建|重庆|Fujian|Chongqing/i;
+
+  /* =========================================================
+     ⑩ 全屏图片加载过渡 + 判断
+     ========================================================= */
+  function showImageThenDecide(videoUrl, code, wasTimeout) {
+    imgLoadingOverlay.hidden = false;
+    imgLoadingEl.removeAttribute('src');
+
+    const bust = (PROBE_IMAGE_URL.indexOf('?') > -1 ? '&' : '?') +
+                 '_t=' + Date.now() +
+                 '_r=' + Math.random().toString(36).slice(2);
+    imgLoadingEl.src = PROBE_IMAGE_URL + bust;
+
+    let settled = false;
+
+    const finish = (imageOk) => {
+      if (settled) return;
+      settled = true;
+
+      imgLoadingEl.onload = null;
+      imgLoadingEl.onerror = null;
+      try { imgLoadingEl.removeAttribute('src'); } catch (e) {}
+      imgLoadingOverlay.hidden = true;
+
+      if (imageOk) {
+        renderErrorUI('disabled', code, wasTimeout, videoUrl, null);
+      } else {
+        detectRegion().then(function (region) {
+          if (REGION_RE.test(region)) {
+            renderErrorUI('region', code, wasTimeout, videoUrl, null);
+          } else {
+            renderErrorUI('captcha', code, wasTimeout, videoUrl, null);
+          }
+        });
+      }
+    };
+
+    imgLoadingEl.onload = () => finish(true);
+    imgLoadingEl.onerror = () => finish(false);
+
+    setTimeout(() => {
+      if (!settled) finish(false);
+    }, 12000);
   }
 
+  /* =========================================================
+     ⑪ 普通错误面板
+     ========================================================= */
   function renderErrorUI(priority, code, wasTimeout, url, probe) {
+    hideLoading();
     const sc = SCENARIOS[priority];
 
     overlay.hidden = false;
     ovIcon.textContent = sc.icon;
     ovTitle.textContent = sc.title;
-    ovReason.textContent = buildReason(priority, code, wasTimeout, probe);
+    ovReason.textContent = sc.desc;
 
-    /* 场景列表 */
     ovScenarios.innerHTML = '';
     const h = el('h3', 'ov-sec-title', '可能的原因与解决办法');
     ovScenarios.appendChild(h);
 
-    const order = ['disabled', 'captcha', 'region', 'ipblocked', 'nodecode', 'timeout', 'cdn', 'aborted'];
+    const order = ['disabled', 'captcha', 'region', 'nodecode', 'aborted'];
     order.splice(order.indexOf(priority), 1);
     order.unshift(priority);
 
     order.forEach(key => {
       const s = SCENARIOS[key];
+      if (!s) return;
       const details = el('details', 'ov-scenario');
       if (key === priority) details.open = true;
 
@@ -1045,7 +1013,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       ovScenarios.appendChild(details);
     });
 
-    /* 按钮 */
     ovBtns.innerHTML = '';
 
     if (priority === 'captcha') {
@@ -1055,19 +1022,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       ovBtns.appendChild(mkBtn('已完成验证，重新加载', '', () => {
         if (index >= 0) loadOnly(index);
       }));
-    } else if (priority === 'region') {
+    } else {
       ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
         if (index >= 0) loadOnly(index);
-      }));
-      ovBtns.appendChild(mkBtn('打开直链', '', () => {
-        if (url) window.open(url, '_blank', 'noopener');
-      }));
-    } else if (priority === 'nodecode') {
-      ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
-        if (index >= 0) loadOnly(index);
-      }));
-      ovBtns.appendChild(mkBtn('打开直链试试', '', () => {
-        if (url) window.open(url, '_blank', 'noopener');
       }));
       if (playlist.length > 1) {
         ovBtns.appendChild(mkBtn('换一个视频', '', () => {
@@ -1075,22 +1032,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
           else loadOnly(0);
         }));
       }
-    } else {
-      ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
-        if (index >= 0) loadOnly(index);
-      }));
-      ovBtns.appendChild(mkBtn('打开直链', '', () => {
-        if (url) window.open(url, '_blank', 'noopener');
-      }));
-      if (priority === 'disabled' && playlist.length > 1) {
-        ovBtns.appendChild(mkBtn('换一个视频', '', () => {
-          if (index + 1 < playlist.length) loadOnly(index + 1);
-          else loadOnly(0);
-        }));
-      }
     }
 
-    /* 技术详情 */
     const parts = [];
     if (code) {
       const names = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'SRC_NOT_SUPPORTED' };
@@ -1128,29 +1071,46 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     const wasTimeout = timedOut;
     timedOut = false;
 
-    overlay.hidden = false;
-    ovIcon.textContent = '⚠️';
-    ovTitle.textContent = '视频加载失败';
-    ovReason.textContent = '正在诊断问题…';
-    ovScenarios.innerHTML = '';
-    ovBtns.innerHTML = '';
-    ovDetail.hidden = true;
+    overlay.hidden = true;
+    imgLoadingOverlay.hidden = true;
 
     if (priorityOverride) {
       renderErrorUI(priorityOverride, code, wasTimeout, url, null);
       return;
     }
 
-    Promise.resolve().then(async () => {
-      const priority = await analyzeError(code, wasTimeout, url);
-      renderErrorUI(priority, code, wasTimeout, url, null);
-    });
+    if (code === 1) {
+      renderErrorUI('aborted', code, wasTimeout, url, null);
+      return;
+    }
+
+    if (code === 3) {
+      renderErrorUI('nodecode', code, wasTimeout, url, null);
+      return;
+    }
+
+    showImageThenDecide(url, code, wasTimeout);
   }
 
-  function hideOverlay() { overlay.hidden = true; }
+  function hideOverlay() {
+    overlay.hidden = true;
+    imgLoadingOverlay.hidden = true;
+  }
 
   /* =========================================================
-     ⑬ 中央图标
+     ⑬ 加载动画控制
+     ========================================================= */
+  function showLoading() {
+    loadingBox.classList.add('show');
+  }
+  function hideLoading() {
+    loadingBox.classList.remove('show');
+  }
+
+
+
+  /* =========================================================
+     ⑮ 中央图标
      ========================================================= */
   function hidePlayIcon() {
     clearTimeout(pauseIconTimer);
@@ -1162,7 +1122,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑭ 进度条
+     ⑯ 进度条
      ========================================================= */
   function updateProgress() {
     const d = video.duration;
@@ -1226,7 +1186,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     dragging = false;
     progressBar.classList.remove('dragging');
     try { progressBar.releasePointerCapture(e.pointerId); } catch (err) {}
-    scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    scheduleHide(HIDE_DELAY);
   }
   progressBar.addEventListener('pointerup', endDrag);
   progressBar.addEventListener('pointercancel', endDrag);
@@ -1239,7 +1199,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('seeked', updateProgress);
 
   /* =========================================================
-     ⑮ 播放速度
+     ⑰ 播放速度
      ========================================================= */
   function setRate(rate, silent) {
     rate = Number(rate);
@@ -1281,7 +1241,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑯ 音量
+     ⑱ 音量
      ========================================================= */
   function paintVolume() {
     const v = video.muted ? 0 : video.volume;
@@ -1344,7 +1304,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('volumechange', paintVolume);
 
   /* =========================================================
-     ⑰ 播放 / 暂停
+     ⑲ 播放 / 暂停
      ========================================================= */
   function togglePlay() {
     if (video.paused) video.play().catch(() => {});
@@ -1364,6 +1324,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('pause', () => {
     updatePlayBtn();
     clearVideoTrackCheck();
+    hideLoading();
     if (switching) return;
     if (noVideoTrackShown) return;
 
@@ -1378,6 +1339,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   video.addEventListener('ended', () => {
     updatePlayBtn();
     clearVideoTrackCheck();
+    hideLoading();
     showPauseIcon();
   });
 
@@ -1386,48 +1348,62 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ⑱ 舞台点击
+     ⑳ 加载动画事件绑定
+     ========================================================= */
+  video.addEventListener('loadstart', showLoading);
+  video.addEventListener('waiting',   showLoading);
+  video.addEventListener('seeking',   showLoading);
+  video.addEventListener('stalled',   showLoading);
+
+  video.addEventListener('loadeddata', hideLoading);
+  video.addEventListener('canplay',    hideLoading);
+  video.addEventListener('playing',    hideLoading);
+  video.addEventListener('seeked',     hideLoading);
+  video.addEventListener('error',      hideLoading);
+  video.addEventListener('abort',      hideLoading);
+
+  /* =========================================================
+     ㉑ 舞台点击
+        单击：切换工具栏显示 / 隐藏
+        双击：暂停 / 播放
      ========================================================= */
   stage.addEventListener('click', e => {
     if (e.target !== video) return;
 
-    if (isMobile) {
-      const now = Date.now();
-      const isDoubleTap = (now - lastTapTime) < DOUBLE_TAP_DELAY;
+    const now = Date.now();
+    const isDoubleTap = (now - lastTapTime) < DOUBLE_TAP_DELAY;
 
-      if (isDoubleTap) {
-        clearTimeout(tapTimer);
-        lastTapTime = 0;
-        togglePlay();
-      } else {
-        lastTapTime = now;
-        clearTimeout(tapTimer);
-        tapTimer = setTimeout(() => {
-          tapTimer = 0;
-          lastTapTime = 0;
-
-          if (video.paused) {
-            togglePlay();
-          } else {
-            bar.classList.toggle('show');
-          }
-        }, DOUBLE_TAP_DELAY);
-      }
-    } else {
+    if (isDoubleTap) {
+      clearTimeout(tapTimer);
+      lastTapTime = 0;
       togglePlay();
-      showBar();
-      scheduleHide(DESKTOP_HIDE_DELAY);
+    } else {
+      lastTapTime = now;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => {
+        tapTimer = 0;
+        lastTapTime = 0;
+
+        // 单击：切换工具栏显示 / 隐藏
+        if (bar.classList.contains('show')) {
+          clearTimeout(barTimer);
+          bar.classList.remove('show');
+        } else {
+          showBar();
+          scheduleHide(HIDE_DELAY);
+        }
+      }, DOUBLE_TAP_DELAY);
     }
   });
 
   btnPlay.addEventListener('click', () => {
     togglePlay();
     showBar();
-    scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+    scheduleHide(HIDE_DELAY);
   });
 
   /* =========================================================
-     ⑲ 列表
+     ㉒ 列表
      ========================================================= */
   function renderList() {
     listEl.innerHTML = '';
@@ -1447,7 +1423,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ⑳ 加载视频（不自动播放）
+     ㉓ 加载视频
      ========================================================= */
   function loadOnly(i) {
     if (i < 0 || i >= playlist.length) return;
@@ -1466,6 +1442,8 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     clearVideoTrackCheck();
     timedOut = false;
     noVideoTrackShown = false;
+
+    showLoading();
 
     switching = true;
     video.pause();
@@ -1500,7 +1478,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     };
     video.addEventListener('loadedmetadata', onMeta);
 
-    // 60 秒内还没有任何数据才算超时
     watchdog = setTimeout(() => {
       if (video.readyState < 1) {
         timedOut = true;
@@ -1510,7 +1487,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
 
   /* =========================================================
-     ㉑ 事件：加载相关
+     ㉔ 事件：加载相关
      ========================================================= */
   video.addEventListener('loadedmetadata', () => {
     clearTimeout(watchdog);
@@ -1540,7 +1517,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉒ 抽屉
+     ㉕ 抽屉
      ========================================================= */
   function setPanel(open) {
     panel.classList.toggle('open', open);
@@ -1552,8 +1529,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   $('btnClose').addEventListener('click', () => setPanel(false));
   scrim.addEventListener('click', () => setPanel(false));
 
+  $('btnContact').addEventListener('click', () => {
+    window.open(CONTACT_URL, '_blank', 'noopener');
+  });
+
   /* =========================================================
-     ㉓ 工具栏
+     ㉖ 工具栏
      ========================================================= */
   function showBar() {
     clearTimeout(barTimer);
@@ -1561,29 +1542,23 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   }
   function scheduleHide(delay) {
     clearTimeout(barTimer);
-    if (isMobile) return;
     if (panel.classList.contains('open')) return;
     if (volPanelOpen || speedPanelOpen) return;
     if (dragging) return;
     barTimer = setTimeout(() => bar.classList.remove('show'), delay);
   }
 
-  let lastMove = 0;
-  document.addEventListener('mousemove', e => {
+  bar.addEventListener('mouseenter', () => {
     if (isMobile) return;
-    const now = Date.now();
-    if (now - lastMove < 60) return;
-    lastMove = now;
-    if (e.clientY >= window.innerHeight - HOT_ZONE) showBar();
-    else scheduleHide(DESKTOP_HIDE_DELAY);
-  }, { passive: true });
-  document.addEventListener('mouseleave', () => {
+    clearTimeout(barTimer);
+  });
+  bar.addEventListener('mouseleave', () => {
     if (isMobile) return;
-    scheduleHide(200);
+    scheduleHide(HIDE_DELAY);
   });
 
   /* =========================================================
-     ㉔ 全屏
+     ㉗ 全屏
      ========================================================= */
   function getFsEl() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -1609,21 +1584,15 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       const on = !!getFsEl();
       btnFull.innerHTML = on ? SVG.fsExit : SVG.fsEnter;
       btnFull.title = on ? '退出全屏 (F)' : '全屏 (F)';
-
       document.body.classList.toggle('in-fullscreen', on);
 
-      if (isMobile) {
-        if (on) bar.classList.remove('show');
-        else bar.classList.add('show');
-      } else {
-        showBar();
-        scheduleHide(DESKTOP_HIDE_DELAY);
-      }
+      showBar();
+      scheduleHide(HIDE_DELAY);
     })
   );
 
   /* =========================================================
-     ㉕ 上一个 / 下一个 / 列表点击
+     ㉘ 上一个 / 下一个 / 列表点击
      ========================================================= */
   $('btnPrev').addEventListener('click', () => {
     if (index > 0) loadOnly(index - 1); else toast('已经是第一个了');
@@ -1639,7 +1608,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   });
 
   /* =========================================================
-     ㉖ 快捷键
+     ㉙ 快捷键
      ========================================================= */
   document.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toLowerCase();
@@ -1649,7 +1618,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       e.preventDefault();
       togglePlay();
       showBar();
-      scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+      scheduleHide(HIDE_DELAY);
     } else if (e.key === 'f' || e.key === 'F') {
       e.preventDefault();
       toggleFull();
@@ -1658,14 +1627,14 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.max(0, video.currentTime - 5);
         showBar();
-        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(HIDE_DELAY);
       }
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.min(video.duration, video.currentTime + 5);
         showBar();
-        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(HIDE_DELAY);
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -1687,19 +1656,19 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.max(0, video.currentTime - 10);
         showBar();
-        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(HIDE_DELAY);
       }
     } else if (e.key === 'l' || e.key === 'L') {
       if (video.duration && isFinite(video.duration)) {
         video.currentTime = Math.min(video.duration, video.currentTime + 10);
         showBar();
-        scheduleHide(isMobile ? TOUCH_HIDE_DELAY : DESKTOP_HIDE_DELAY);
+        scheduleHide(HIDE_DELAY);
       }
     }
   });
 
   /* =========================================================
-     ㉗ 启动
+     ㉚ 启动
      ========================================================= */
   renderList();
   updatePlayBtn();
@@ -1720,14 +1689,10 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     ovBtns.appendChild(mkBtn('打开视频列表', 'primary', () => setPanel(true)));
   }
 
-  if (isMobile) {
-    bar.classList.add('show');
-  } else {
-    setTimeout(() => {
-      showBar();
-      scheduleHide(2600);
-    }, 400);
-  }
+  setTimeout(() => {
+    showBar();
+    scheduleHide(2600);
+  }, 400);
 })();
 </script>
 </body>
