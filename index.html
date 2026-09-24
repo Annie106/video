@@ -1367,7 +1367,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
   /* =========================================================
      ㉑ 舞台点击
-        移动端：单击 → 显示功能栏（7 秒后隐藏，点击功能栏重新计时）
+        移动端：单击 → 切换功能栏显示/隐藏；显示后 7 秒自动隐藏
         桌面端：单击 → 切换工具栏显示 / 隐藏
         双击（两端）：暂停 / 播放
      ========================================================= */
@@ -1389,9 +1389,14 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         lastTapTime = 0;
 
         if (isMobile) {
-          /* 移动端：单击显示功能栏，7 秒后隐藏 */
-          showBar();
-          scheduleHide(MOBILE_HIDE_DELAY);
+          /* 移动端：单击切换功能栏显示/隐藏；显示后 7 秒自动隐藏 */
+          if (bar.classList.contains('show')) {
+            clearTimeout(barTimer);
+            bar.classList.remove('show');
+          } else {
+            showBar();
+            scheduleHide(MOBILE_HIDE_DELAY);
+          }
         } else {
           /* 桌面端：单击切换工具栏显示 / 隐藏 */
           if (bar.classList.contains('show')) {
