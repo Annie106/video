@@ -700,8 +700,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   /* =========================================================
      ③ 全局状态
      ========================================================= */
-  const HIDE_DELAY = 700;   // 鼠标停止移动后 3 秒自动隐藏
-  const HOT_ZONE = 170;      // 距底部多少像素内视为“靠近功能栏”
+  const HIDE_DELAY = 700;           // 桌面端：鼠标停止移动后 0.7 秒自动隐藏
+  const MOBILE_HIDE_DELAY = 7000;   // 移动端：单击显示功能栏后 7 秒自动隐藏
+  const HOT_ZONE = 170;             // 距底部多少像素内视为“靠近功能栏”（桌面端）
   const VIDEO_TRACK_CHECK_DELAY = 3000;
   const DOUBLE_TAP_DELAY = 280;
 
@@ -1366,8 +1367,9 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 
   /* =========================================================
      ㉑ 舞台点击
-        单击：切换工具栏显示 / 隐藏
-        双击：暂停 / 播放
+        移动端：单击 → 显示功能栏（7 秒后隐藏，点击功能栏重新计时）
+        桌面端：单击 → 切换工具栏显示 / 隐藏
+        双击（两端）：暂停 / 播放
      ========================================================= */
   stage.addEventListener('click', e => {
     if (e.target !== video) return;
@@ -1386,13 +1388,19 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
         tapTimer = 0;
         lastTapTime = 0;
 
-        // 单击：切换工具栏显示 / 隐藏
-        if (bar.classList.contains('show')) {
-          clearTimeout(barTimer);
-          bar.classList.remove('show');
-        } else {
+        if (isMobile) {
+          /* 移动端：单击显示功能栏，7 秒后隐藏 */
           showBar();
-          scheduleHide(HIDE_DELAY);
+          scheduleHide(MOBILE_HIDE_DELAY);
+        } else {
+          /* 桌面端：单击切换工具栏显示 / 隐藏 */
+          if (bar.classList.contains('show')) {
+            clearTimeout(barTimer);
+            bar.classList.remove('show');
+          } else {
+            showBar();
+            scheduleHide(HIDE_DELAY);
+          }
         }
       }, DOUBLE_TAP_DELAY);
     }
@@ -1547,10 +1555,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     if (panel.classList.contains('open')) return;
     if (volPanelOpen || speedPanelOpen) return;
     if (dragging) return;
-    barTimer = setTimeout(() => bar.classList.remove('show'), delay);
+    /* 移动端统一使用 7 秒延迟；桌面端使用传入的延迟 */
+    const actualDelay = isMobile ? MOBILE_HIDE_DELAY : delay;
+    barTimer = setTimeout(() => bar.classList.remove('show'), actualDelay);
   }
 
-  /* 判断鼠标是否靠近底部功能栏（在栏上或距底部 HOT_ZONE 内） */
+  /* 判断鼠标是否靠近底部功能栏（在栏上或距底部 HOT_ZONE 内）——仅桌面端 */
   function isNearBar(e) {
     if (!e) return false;
     if (e.target && bar.contains(e.target)) return true;
@@ -1559,7 +1569,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     return e.clientY >= rect.top - 40;
   }
 
-  /* 鼠标移动：显示功能栏；停止移动 3 秒后隐藏；靠近功能栏时不隐藏 */
+  /* 桌面端：鼠标移动显示功能栏，停止 0.7 秒后隐藏；靠近功能栏时不隐藏 */
   stage.addEventListener('mousemove', e => {
     if (isMobile) return;
     showBar();
@@ -1570,7 +1580,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     }
   }, { passive: true });
 
-  /* 鼠标在功能栏上：保持显示；离开后重新计时 */
+  /* 桌面端鼠标进入功能栏：保持显示；离开后重新计时 */
   bar.addEventListener('mouseenter', () => {
     if (isMobile) return;
     clearTimeout(barTimer);
@@ -1578,6 +1588,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   bar.addEventListener('mouseleave', () => {
     if (isMobile) return;
     scheduleHide(HIDE_DELAY);
+  });
+
+  /* 移动端：点击功能栏任意位置重新计时 */
+  bar.addEventListener('click', () => {
+    if (!isMobile) return;
+    scheduleHide(MOBILE_HIDE_DELAY);
   });
 
   /* =========================================================
