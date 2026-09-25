@@ -39,6 +39,62 @@ button.primary:hover{
   background:linear-gradient(135deg,#7aadff 0%,#5f97ff 45%,#3f74e6 100%);
 }
 
+/* ===== button-wrap 结构（无边框、无蓝色柔光） ===== */
+.button-wrap{
+  position:relative;
+  display:inline-block;
+}
+.button-wrap button{
+  position:relative;
+  z-index:2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:10px 22px;
+  border:none;
+  border-radius:8px;
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.8px;
+  color:#fff;
+  background:#2a2a32;
+  cursor:pointer;
+  transition:transform .15s ease, background .15s ease;
+  box-shadow:none;
+}
+.button-wrap button svg{
+  width:16px;height:16px;display:block;pointer-events:none;fill:currentColor;
+}
+.button-wrap .button-shadow{
+  position:absolute;
+  z-index:1;
+  inset:0;
+  border-radius:8px;
+  background:#2a2a32;
+  filter:blur(8px);
+  opacity:.6;
+  transform:translateY(4px);
+  transition:transform .15s ease, opacity .15s ease;
+  pointer-events:none;
+}
+.button-wrap:hover button{
+  background:#33333d;
+  transform:translateY(-2px);
+}
+.button-wrap:hover .button-shadow{
+  transform:translateY(7px);
+  opacity:.85;
+}
+.button-wrap:active button{
+  transform:translateY(1px);
+  background:#232329;
+}
+.button-wrap:active .button-shadow{
+  transform:translateY(2px);
+  opacity:.5;
+}
+
 #stage{position:fixed;inset:0;background:#000;overflow:hidden}
 #player{width:100%;height:100%;object-fit:contain;background:#000;display:block;outline:none}
 
@@ -99,8 +155,27 @@ button.primary:hover{
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   opacity:0;transition:opacity .22s,transform .22s;
 }
-#playIcon svg{width:38px;height:38px;display:block;margin-left:4px}
 #playIcon.persist{opacity:.92;transform:translate(-50%,-50%) scale(1)}
+
+/* 中央播放 / 暂停图标（checkbox 切换组件） */
+#playIcon .container{
+  position:relative;
+  width:40px;height:40px;
+  display:grid;place-items:center;
+}
+#playIcon .container input{display:none}
+#playIcon .container svg{
+  position:absolute;
+  height:38px;
+  width:auto;
+  display:block;
+  fill:currentColor;
+  transition:opacity .2s ease, transform .2s ease;
+}
+#playIcon .container .play{opacity:1;transform:scale(1)}
+#playIcon .container .pause{opacity:0;transform:scale(.6)}
+#playIcon.show-pause .container .play{opacity:0;transform:scale(.6)}
+#playIcon.show-pause .container .pause{opacity:1;transform:scale(1)}
 
 #bar{
   position:absolute;left:0;right:0;bottom:0;z-index:15;
@@ -494,7 +569,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   word-break:break-all;
   white-space:pre-wrap;
 }
-.ov-btns{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
+.ov-btns{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px;align-items:center}
 
 #imgLoadingOverlay{
   position:fixed;inset:0;z-index:9999;
@@ -540,8 +615,17 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     <div class="loading-text">加载中…</div>
   </div>
 
+  <!-- 中央播放 / 暂停图标 -->
   <div id="playIcon">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l12-7z"/></svg>
+    <label class="container">
+      <input type="checkbox" />
+      <svg class="play" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true">
+        <path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/>
+      </svg>
+      <svg class="pause" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" aria-hidden="true">
+        <path d="M48 64C21.5 64 0 85.5 0 112V400c0 26.5 21.5 48 48 48H80c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H48zm192 0c-26.5 0-48 21.5-48 48V400c0 26.5 21.5 48 48 48h32c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H240z"/>
+      </svg>
+    </label>
   </div>
 
   <div id="bar">
@@ -774,6 +858,12 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     fsExit:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4"/><path d="M15 4v5h5"/><path d="M9 20v-5H4"/><path d="M15 20v-5h5"/></svg>'
   };
 
+  /* 刷新图标 SVG */
+  const REFRESH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"></path><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"></path></svg>';
+
+  /* 列表图标 SVG */
+  const LIST_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/></svg>';
+
   let playlist = VIDEO_LIST.map(item => ({
     name: item.name || item.url,
     url: item.url
@@ -793,6 +883,26 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     b.type = 'button';
     b.addEventListener('click', onClick);
     return b;
+  }
+  /* 创建 button-wrap 结构（按钮 + 阴影层） */
+  function mkShadowBtn(text, svg, onClick) {
+    const wrap = el('div', 'button-wrap');
+    const b = el('button');
+    b.type = 'button';
+    b.innerHTML = svg + '<span>' + text + '</span>';
+    b.addEventListener('click', onClick);
+    const shadow = el('div', 'button-shadow');
+    wrap.appendChild(b);
+    wrap.appendChild(shadow);
+    return wrap;
+  }
+  /* 刷新按钮 */
+  function mkRefreshBtn(text, onClick) {
+    return mkShadowBtn(text, REFRESH_SVG, onClick);
+  }
+  /* 列表按钮 */
+  function mkListBtn(text, onClick) {
+    return mkShadowBtn(text, LIST_SVG, onClick);
   }
   let toastTimer = 0;
   function toast(msg) {
@@ -1022,17 +1132,17 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
       ovBtns.appendChild(mkBtn('打开直链完成验证', 'primary', () => {
         if (url) window.open(url, '_blank', 'noopener');
       }));
-      ovBtns.appendChild(mkBtn('已完成验证，重新加载', '', () => {
+      ovBtns.appendChild(mkRefreshBtn('重新加载', () => {
         if (index >= 0) loadOnly(index);
       }));
     } else {
-      ovBtns.appendChild(mkBtn('重新加载', 'primary', () => {
+      ovBtns.appendChild(mkRefreshBtn('重新加载', () => {
         if (index >= 0) loadOnly(index);
       }));
       if (playlist.length > 1) {
-        ovBtns.appendChild(mkBtn('换一个视频', '', () => {
-          if (index + 1 < playlist.length) loadOnly(index + 1);
-          else loadOnly(0);
+        /* 换一个视频：打开视频列表面板 */
+        ovBtns.appendChild(mkListBtn('换一个视频', () => {
+          setPanel(true);
         }));
       }
     }
@@ -1119,9 +1229,11 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     clearTimeout(pauseIconTimer);
     playIcon.classList.remove('persist');
   }
+  /* 暂停时显示中央图标（播放三角） */
   function showPauseIcon() {
     void playIcon.offsetWidth;
     playIcon.classList.add('persist');
+    playIcon.classList.remove('show-pause');
   }
 
   /* =========================================================
@@ -1726,7 +1838,7 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     overlay.hidden = false;
     ovIcon.textContent = '🎬';
     ovTitle.textContent = '没有视频';
-    ovReason.textContent = '请在 HTML 源码顶部的 VIDEO_LIST 数组中添加视频直链。';
+    ovReason.textContent = '请在 HTML 源码顶部的 VIDEO_LIST 数组中添加新视频链接。';
     ovScenarios.innerHTML = '';
     ovDetail.hidden = true;
     ovBtns.innerHTML = '';
