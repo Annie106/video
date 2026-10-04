@@ -600,9 +600,138 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 #toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ===== 全屏公告弹窗 ===== */
+#noticeModal{
+  position:fixed;inset:0;z-index:99999;
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+  background:rgba(4,4,6,.86);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  opacity:1;transition:opacity .28s ease;
+}
+#noticeModal[hidden]{display:none}
+#noticeModal.closing{opacity:0}
+.notice-card{
+  width:min(560px,100%);
+  max-height:90vh;overflow:auto;
+  padding:28px 26px 24px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(160deg,#1a1a22 0%,#121218 55%,#0e0e13 100%);
+  box-shadow:0 24px 64px rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.06) inset;
+  animation:noticePop .3s cubic-bezier(.2,.8,.3,1);
+  text-align:center;
+}
+@keyframes noticePop{
+  from{opacity:0;transform:translateY(16px) scale(.97)}
+  to{opacity:1;transform:none}
+}
+.notice-ico{
+  width:64px;height:64px;margin:0 auto 16px;
+  display:grid;place-items:center;
+  border-radius:50%;
+  font-size:30px;line-height:1;
+  background:linear-gradient(135deg,rgba(79,140,255,.28),rgba(79,140,255,.08));
+  border:1px solid rgba(79,140,255,.4);
+  box-shadow:0 0 32px rgba(79,140,255,.28);
+}
+.notice-title{
+  margin:0 0 8px;
+  font-size:20px;font-weight:800;letter-spacing:.4px;
+  background:linear-gradient(100deg,#ffffff 0%,#cfe0ff 60%,#9fc0ff 100%);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+}
+.notice-sub{
+  margin:0 0 18px;
+  font-size:12.5px;color:var(--dim);letter-spacing:.6px;
+}
+.notice-body{
+  text-align:left;
+  padding:16px 18px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);
+  margin-bottom:20px;
+}
+.notice-body p{
+  margin:0 0 12px;
+  font-size:13.5px;line-height:1.85;color:#c9c9d4;
+}
+.notice-body p:last-child{margin-bottom:0}
+.notice-body .hl{color:#a8c4ff;font-weight:600}
+.notice-body .warn{color:#ffc0c0;font-weight:600}
+.notice-body a{
+  color:#a8c4ff;text-decoration:none;word-break:break-all;
+  border-bottom:1px dashed rgba(168,196,255,.5);
+}
+.notice-body a:hover{color:#fff;border-bottom-color:#fff}
+.notice-actions{
+  display:flex;justify-content:center;
+  margin-top:4px;
+}
+#noticeConfirm{
+  min-width:200px;
+  padding:12px 28px;
+  font-size:14px;font-weight:700;letter-spacing:1px;
+  border:none;border-radius:10px;
+  color:#fff;
+  background:#2a2a32;
+  box-shadow:0 0 0 0 transparent;
+  transition:background .2s ease, transform .15s ease, box-shadow .2s ease, opacity .2s ease;
+  cursor:not-allowed;
+  opacity:.55;
+}
+#noticeConfirm.ready{
+  cursor:pointer;
+  opacity:1;
+  background:linear-gradient(135deg,#6aa1ff 0%,#4f8cff 45%,#3568d8 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.28) inset,0 4px 16px rgba(79,140,255,.42);
+}
+#noticeConfirm.ready:hover{
+  background:linear-gradient(135deg,#7aadff 0%,#5f97ff 45%,#3f74e6 100%);
+  transform:translateY(-2px);
+}
+#noticeConfirm.ready:active{
+  transform:translateY(1px);
+}
 </style>
 </head>
 <body>
+
+<!-- ===== 全屏公告弹窗 ===== -->
+<div id="noticeModal">
+  <div class="notice-card">
+    <div class="notice-ico">📢</div>
+    <h2 class="notice-title">站点迁移公告</h2>
+    <p class="notice-sub">ANNIE · 视频播放器</p>
+
+    <div class="notice-body">
+      <p>
+        本视频播放器已迁移至博客站点：
+        <br>
+        <a href="https://annie106.github.io/annie106" target="_blank" rel="noopener">
+          https://annie106.github.io/annie106
+        </a>
+      </p>
+      <p>
+        <span class="hl">后续请前往新站点访问</span>，本页仅作过渡保留。
+      </p>
+      <p>
+        <span class="warn">本网站的视频内容将不再更新与维护</span>，页面中现有的视频链接可能随时失效。
+        如需观看最新内容，请访问上方博客地址。
+      </p>
+      <p>
+        感谢一直以来的使用与支持。
+      </p>
+    </div>
+
+    <div class="notice-actions">
+      <button id="noticeConfirm" type="button" disabled>请稍候（5s）</button>
+    </div>
+  </div>
+</div>
 
 <div id="stage">
   <video id="player" playsinline preload="metadata"></video>
@@ -742,6 +871,43 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
 <script>
 (function () {
   'use strict';
+
+  /* =========================================================
+     ⓪ 全屏公告弹窗（5 秒倒计时后才可确认关闭）
+     ========================================================= */
+  (function initNotice() {
+    const modal   = document.getElementById('noticeModal');
+    const confirm = document.getElementById('noticeConfirm');
+    if (!modal || !confirm) return;
+
+    const COUNTDOWN = 5;
+    let remain = COUNTDOWN;
+
+    confirm.textContent = '请稍候（' + remain + 's）';
+    confirm.disabled = true;
+    confirm.classList.remove('ready');
+
+    const timer = setInterval(function () {
+      remain--;
+      if (remain > 0) {
+        confirm.textContent = '请稍候（' + remain + 's）';
+      } else {
+        clearInterval(timer);
+        confirm.disabled = false;
+        confirm.classList.add('ready');
+        confirm.textContent = '我知道了';
+      }
+    }, 1000);
+
+    confirm.addEventListener('click', function () {
+      if (confirm.disabled) return;
+      modal.classList.add('closing');
+      setTimeout(function () {
+        modal.hidden = true;
+        modal.classList.remove('closing');
+      }, 280);
+    });
+  })();
 
   /* =========================================================
      ① 视频直链列表
@@ -1131,9 +1297,6 @@ body.mobile-mode #btnSpeed{width:50px;height:44px;font-size:14px}
     ovBtns.innerHTML = '';
 
     if (priority === 'captcha') {
-      ovBtns.appendChild(mkBtn('打开直链完成验证', 'primary', () => {
-        if (url) window.open(url, '_blank', 'noopener');
-      }));
       ovBtns.appendChild(mkRefreshBtn('重新加载', () => {
         if (index >= 0) loadOnly(index);
       }));
